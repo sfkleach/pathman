@@ -33,6 +33,15 @@ user has write permission. Report the action back to the console.
 Implement the `pathman add`, `pathman remove` and `pathman list` commands. This
 is effectively CRUD for our managed folder.
 
+## Part 4b
+
+Add a `--long` (short option `-l`) to include the symlink info on `pathman list`.
+
+## Part 4c
+
+Adjust the README.md file to be consistent with the command-options developed
+so far.
+
 
 ## Part N
 
@@ -55,7 +64,8 @@ Commands are:
   Note that `rm` is a synonym for `remove`.
 
 - `pathman list`: Lists all executables currently managed by `pathman`. 
-  Note that `ls` is a synonym for `list`.
+  Note that `ls` is a synonym for `list`. This an unadorned list by default.
+  Use the `--long` option to include a link back to the symlinked file.
 
 - `pathman folder`: Displays the path to the managed folder. The folder
    argument is optional.

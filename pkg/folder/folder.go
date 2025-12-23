@@ -308,6 +308,51 @@ func List() ([]string, error) {
 	return symlinks, nil
 }
 
+// SymlinkInfo represents information about a symlink.
+type SymlinkInfo struct {
+	Name   string
+	Target string
+}
+
+// ListLong returns detailed information about all symlinks in the managed folder.
+func ListLong() ([]SymlinkInfo, error) {
+	folderPath, err := GetManagedFolder()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	if !Exists(folderPath) {
+		return nil, fmt.Errorf("managed folder does not exist: %s", folderPath)
+	}
+
+	entries, err := os.ReadDir(folderPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read managed folder: %w", err)
+	}
+
+	var symlinks []SymlinkInfo
+	for _, entry := range entries {
+		entryPath := filepath.Join(folderPath, entry.Name())
+		info, err := os.Lstat(entryPath)
+		if err != nil {
+			continue
+		}
+		// Only include symlinks.
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(entryPath)
+			if err != nil {
+				target = "<error reading link>"
+			}
+			symlinks = append(symlinks, SymlinkInfo{
+				Name:   entry.Name(),
+				Target: target,
+			})
+		}
+	}
+
+	return symlinks, nil
+}
+
 // Add creates a symlink to the executable in the managed folder.
 func Add(executablePath, name string) error {
 	folderPath, err := GetManagedFolder()

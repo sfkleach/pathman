@@ -72,6 +72,8 @@ func NewRemoveCmd() *cobra.Command {
 
 // NewListCmd creates the list command.
 func NewListCmd() *cobra.Command {
+	var long bool
+
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
@@ -79,17 +81,30 @@ func NewListCmd() *cobra.Command {
 		Long:    `List all symlinks currently managed by pathman.`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			symlinks, err := folder.List()
-			if err != nil {
-				return err
-			}
+			if long {
+				symlinks, err := folder.ListLong()
+				if err != nil {
+					return err
+				}
 
-			for _, name := range symlinks {
-				fmt.Println(name)
+				for _, info := range symlinks {
+					fmt.Printf("%s -> %s\n", info.Name, info.Target)
+				}
+			} else {
+				symlinks, err := folder.List()
+				if err != nil {
+					return err
+				}
+
+				for _, name := range symlinks {
+					fmt.Println(name)
+				}
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets")
 
 	return cmd
 }

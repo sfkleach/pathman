@@ -122,10 +122,11 @@ func NewInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create the managed folder",
-		Args:  cobra.NoArgs,
+		Long: `Create the managed folder with appropriate permissions.
+If the folder already exists, check its permissions and warn if insecure.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("TODO: Create the managed folder")
-			return nil
+			return folder.Init()
 		},
 	}
 

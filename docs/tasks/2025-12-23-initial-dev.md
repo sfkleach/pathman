@@ -12,9 +12,32 @@ stubbed out. Without any arguments, it should report on the folder for symlinks.
 If the folder cannot be found it should report that it is missing and inform
 the user that the folder can be created with the command `pathman init`.
 
+Note: Use cobra for command line parsing.
+
 ## Part 2
 
-To be completed.
+Implement the `pathman init` command. If the folder does not exist, create it,
+ensure the permissions are `chmod a+r,u+w` only, and log the action. If the 
+folder already exists, check the permission and complain if anyone except the
+user has write permission. Report the action back to the console.
+
+## Part 3 - extending `pathman init`
+
+- Check the $PATH variable to determine if the managed folder is on the $PATH.
+- If it is not, print out a message explaining that it should be added to your $PATH.
+- If the SHELL is `bash` explain that this is normally put in your `.profile` or `.bash_profile` and offer to add a suitable command at the end of the relevant file.
+- If the user accepts this, then detect which of `.profile` or `.bash_profile` need to be editing, make the relevant change, and inform the user of what was done.
+
+## Part 4
+
+Implement the `pathman add`, `pathman remove` and `pathman list` commands. This
+is effectively CRUD for our managed folder.
+
+
+## Part N
+
+All normal interactive commands should run the safety check. 
+
 
 ## Background
 

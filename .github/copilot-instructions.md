@@ -14,6 +14,12 @@ When providing technical assistance:
 
 The goal is to build robust, well-designed software, not to avoid technical disagreements.
 
+## Collaboration Guidelines
+
+- Do not create artefacts in the repository 
+  - EXCEPT in the _build folder or, when approved, folders starting with an `_`.
+- Do not commit generated files, binary files, or temporary files.
+
 ## Programming Guidelines
 
 - Comments should be proper sentences, with correct grammar and punctuation,

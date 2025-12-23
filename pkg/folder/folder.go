@@ -55,7 +55,7 @@ func PrintStatus() error {
 	}
 
 	if Exists(folderPath) {
-		fmt.Printf("Managed folder: %s\n", folderPath)
+		fmt.Println(folderPath)
 		return nil
 	}
 

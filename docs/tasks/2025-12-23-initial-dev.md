@@ -42,6 +42,13 @@ Add a `--long` (short option `-l`) to include the symlink info on `pathman list`
 Adjust the README.md file to be consistent with the command-options developed
 so far.
 
+## Part 4d
+
+- Ensure that `pathman add` always adds an absolute symlink to the managed folder.
+
+## Part 5
+
+Implement the `pathman path` subcommand, see below.
 
 ## Part N
 
@@ -59,6 +66,7 @@ Commands are:
 
 - `pathman add <executable>` [--name NAME]: Adds an executable to the managed folder.
   Optionally, you can specify a different name for the symlink using the `--name` flag.
+  Even if supplied in relative form the symlink must be to an absolute path.
 
 - `pathman remove <name>`: Removes the symlink with the specified name from the managed folder.
   Note that `rm` is a synonym for `remove`.
@@ -68,10 +76,17 @@ Commands are:
   Use the `--long` option to include a link back to the symlinked file.
 
 - `pathman folder`: Displays the path to the managed folder. The folder
-   argument is optional.
+   argument is optional. 
 
 - `pathman folder --set <path>`: Sets the managed folder to the specified path,
     creating it if it doesn't exist and saving the configuration in
     `$XDG_CONFIG_HOME/pathman/config.json`, falling back to `$HOME/.config/pathman/config.json`.
+    Note that even if supplied in relative form it must be expanded to an 
+    absolute path.
 
 - `pathman init`: Creates the managed folder if it does not yet exist.
+
+- `pathman path [--front] [--back]`: Checks $PATH to see if the managed folder is already on there.
+  If not it adds the managed folder to the front or back (defaulting to the back)
+  Echos the adjusted path. This is to support this use-case:
+   `export PATH=`pathman path` into our `.bash_profile` (o.n.o.)

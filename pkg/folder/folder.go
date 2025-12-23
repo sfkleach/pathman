@@ -92,19 +92,19 @@ func Init() error {
 			fmt.Printf("Managed folder already exists: %s\n", folderPath)
 			fmt.Printf("WARNING: Folder has insecure permissions: %04o\n", perm)
 			fmt.Println("Group or others have write permission. This is a security risk.")
-			fmt.Println("Recommended permissions: 0644 (owner read/write, all read)")
+			fmt.Println("Recommended permissions: 0755 (owner read/write/execute, all read/execute)")
 		} else {
 			fmt.Printf("Managed folder already exists: %s\n", folderPath)
 			fmt.Printf("Permissions are correct: %04o\n", perm)
 		}
 	} else {
-		// Create the folder with permissions: owner read+write, all read (0644).
-		if err := os.MkdirAll(folderPath, 0644); err != nil {
+		// Create the folder with permissions: owner read+write+execute, all read+execute (0755).
+		if err := os.MkdirAll(folderPath, 0755); err != nil {
 			return fmt.Errorf("failed to create folder: %w", err)
 		}
 
 		fmt.Printf("Created managed folder: %s\n", folderPath)
-		fmt.Printf("Permissions set to: 0644 (owner read/write, all read)\n")
+		fmt.Printf("Permissions set to: 0755 (owner read/write/execute, all read/execute)\n")
 		folderCreated = true
 	}
 
@@ -276,3 +276,120 @@ func PromptUser(question string) (bool, error) {
 	return answer == "y" || answer == "yes", nil
 }
 
+// List returns a list of all symlinks in the managed folder.
+func List() ([]string, error) {
+	folderPath, err := GetManagedFolder()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	if !Exists(folderPath) {
+		return nil, fmt.Errorf("managed folder does not exist: %s", folderPath)
+	}
+
+	entries, err := os.ReadDir(folderPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read managed folder: %w", err)
+	}
+
+	var symlinks []string
+	for _, entry := range entries {
+		entryPath := filepath.Join(folderPath, entry.Name())
+		info, err := os.Lstat(entryPath)
+		if err != nil {
+			continue
+		}
+		// Only include symlinks.
+		if info.Mode()&os.ModeSymlink != 0 {
+			symlinks = append(symlinks, entry.Name())
+		}
+	}
+
+	return symlinks, nil
+}
+
+// Add creates a symlink to the executable in the managed folder.
+func Add(executablePath, name string) error {
+	folderPath, err := GetManagedFolder()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	if !Exists(folderPath) {
+		return fmt.Errorf("managed folder does not exist: %s\nRun 'pathman init' to create it", folderPath)
+	}
+
+	// Get absolute path of the executable.
+	absExecutablePath, err := filepath.Abs(executablePath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Check if the executable exists.
+	info, err := os.Stat(absExecutablePath)
+	if err != nil {
+		return fmt.Errorf("executable does not exist: %s", absExecutablePath)
+	}
+
+	// Check if it's a regular file or symlink (not a directory).
+	if info.IsDir() {
+		return fmt.Errorf("cannot add directory: %s", absExecutablePath)
+	}
+
+	// Determine the symlink name.
+	symlinkName := name
+	if symlinkName == "" {
+		symlinkName = filepath.Base(absExecutablePath)
+	}
+
+	symlinkPath := filepath.Join(folderPath, symlinkName)
+
+	// Check if symlink already exists.
+	if _, err := os.Lstat(symlinkPath); err == nil {
+		return fmt.Errorf("symlink already exists: %s", symlinkName)
+	}
+
+	// Create the symlink.
+	if err := os.Symlink(absExecutablePath, symlinkPath); err != nil {
+		return fmt.Errorf("failed to create symlink: %w", err)
+	}
+
+	fmt.Printf("Added '%s' -> '%s'\n", symlinkName, absExecutablePath)
+	return nil
+}
+
+// Remove removes a symlink from the managed folder.
+func Remove(name string) error {
+	folderPath, err := GetManagedFolder()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	if !Exists(folderPath) {
+		return fmt.Errorf("managed folder does not exist: %s", folderPath)
+	}
+
+	symlinkPath := filepath.Join(folderPath, name)
+
+	// Check if the symlink exists.
+	info, err := os.Lstat(symlinkPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("symlink does not exist: %s", name)
+		}
+		return fmt.Errorf("failed to stat symlink: %w", err)
+	}
+
+	// Make sure it's a symlink.
+	if info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("'%s' is not a symlink", name)
+	}
+
+	// Remove the symlink.
+	if err := os.Remove(symlinkPath); err != nil {
+		return fmt.Errorf("failed to remove symlink: %w", err)
+	}
+
+	fmt.Printf("Removed '%s'\n", name)
+	return nil
+}

@@ -38,15 +38,13 @@ func NewAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <executable>",
 		Short: "Add an executable to the managed folder",
-		Args:  cobra.ExactArgs(1),
+		Long: `Add a symlink to an executable in the managed folder.
+The executable path can be relative or absolute. If --name is not specified,
+the basename of the executable will be used as the symlink name.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			executable := args[0]
-			fmt.Printf("TODO: Add executable '%s'", executable)
-			if name != "" {
-				fmt.Printf(" with name '%s'", name)
-			}
-			fmt.Println()
-			return nil
+			return folder.Add(executable, name)
 		},
 	}
 
@@ -60,11 +58,11 @@ func NewRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove a symlink from the managed folder",
+		Long:  `Remove a symlink by name from the managed folder.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			fmt.Printf("TODO: Remove symlink '%s'\n", name)
-			return nil
+			return folder.Remove(name)
 		},
 	}
 
@@ -76,9 +74,23 @@ func NewListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all managed executables",
+		Long:  `List all symlinks currently managed by pathman.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("TODO: List all symlinks in the managed folder")
+			symlinks, err := folder.List()
+			if err != nil {
+				return err
+			}
+
+			if len(symlinks) == 0 {
+				fmt.Println("No managed executables found.")
+				return nil
+			}
+
+			fmt.Println("Managed executables:")
+			for _, name := range symlinks {
+				fmt.Printf("  %s\n", name)
+			}
 			return nil
 		},
 	}

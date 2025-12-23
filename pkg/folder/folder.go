@@ -57,6 +57,6 @@ func PrintStatus() error {
 	}
 
 	fmt.Printf("Managed folder does not exist: %s\n", folderPath)
-	fmt.Println("You can create it with: pathman folder --create")
+	fmt.Println("You can create it with: pathman init")
 	return nil
 }

@@ -26,6 +26,7 @@ in a single local folder.`,
 	cmd.AddCommand(NewRemoveCmd())
 	cmd.AddCommand(NewListCmd())
 	cmd.AddCommand(NewFolderCmd())
+	cmd.AddCommand(NewInitCmd())
 
 	return cmd
 }
@@ -112,6 +113,21 @@ func NewFolderCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&setPath, "set", "", "Set the managed folder path")
 	cmd.Flags().BoolVar(&create, "create", false, "Create the managed folder")
+
+	return cmd
+}
+
+// NewInitCmd creates the init command.
+func NewInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Create the managed folder",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("TODO: Create the managed folder")
+			return nil
+		},
+	}
 
 	return cmd
 }

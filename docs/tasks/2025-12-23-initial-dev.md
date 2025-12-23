@@ -10,7 +10,7 @@ a full workspace structure with `cmd` and `pkg` folders.
 It should be able to process the command-line options but the actions should be
 stubbed out. Without any arguments, it should report on the folder for symlinks.
 If the folder cannot be found it should report that it is missing and inform
-the user that the folder can be created with the command `pathman folder --create`.
+the user that the folder can be created with the command `pathman init`.
 
 ## Part 2
 
@@ -38,3 +38,5 @@ Commands are:
 - `pathman folder --set <path>`: Sets the managed folder to the specified path,
     creating it if it doesn't exist and saving the configuration in
     `$XDG_CONFIG_HOME/pathman/config.json`, falling back to `$HOME/.config/pathman/config.json`.
+
+- `pathman init`: Creates the managed folder if it does not yet exist.

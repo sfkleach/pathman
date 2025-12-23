@@ -14,8 +14,15 @@ When providing technical assistance:
 
 The goal is to build robust, well-designed software, not to avoid technical disagreements.
 
+
+
 ## Collaboration Guidelines
 
+- When testing the behaviour of a binary, such as nutmeg-tokenizer, always use 
+  `go run ./cmd/nutmeg-tokenizer`
+  rather than `./nutmeg-tokenizer` directory. This ensures you are always testing
+  the latest code rather than an out-of-date compiled binary. (Unless you are 
+  deliberately testing an out-of-date binary).
 - Do not create artefacts in the repository 
   - EXCEPT in the _build folder or, when approved, folders starting with an `_`.
 - Do not commit generated files, binary files, or temporary files.
@@ -43,7 +50,7 @@ For projects we own, including this one, we adopt the following single, uniform,
 - Indentation in source files should use spaces only, no tabs EXCEPT in Golang or 
   Makefiles where tabs are effectively required.
 - Use 4 spaces per indentation level EXCEPT when working in YAML/JSON files where 2 spaces per indentation level is more practical owning to higher nesting levels.
-- UTF-8 encoding should be used for all text files EXCEPT when working wih compilers/interpreters that do not support UTF-8.
+- UTF-8 encoding should be used for all text files EXCEPT when working with compilers/interpreters that do not support UTF-8.
 
 ## Developer documentation guidelines
 

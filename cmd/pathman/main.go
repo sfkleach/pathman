@@ -1,16 +1,16 @@
 package main
 
 import (
-    "fmt"
-    "os"
+	"fmt"
+	"os"
 
-    "github.com/sfkleach/pathman/pkg/commands"
+	"github.com/sfkleach/pathman/pkg/commands"
 )
 
 func main() {
-    rootCmd := commands.NewRootCmd()
-    if err := rootCmd.Execute(); err != nil {
-        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-        os.Exit(1)
-    }
+	rootCmd := commands.NewRootCmd()
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

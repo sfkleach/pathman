@@ -52,8 +52,10 @@ Commands are:
   Optionally, you can specify a different name for the symlink using the `--name` flag.
 
 - `pathman remove <name>`: Removes the symlink with the specified name from the managed folder.
+  Note that `rm` is a synonym for `remove`.
 
-- `pathman list`: Lists all executables currently managed by `pathman`.
+- `pathman list`: Lists all executables currently managed by `pathman`. 
+  Note that `ls` is a synonym for `list`.
 
 - `pathman folder`: Displays the path to the managed folder. The folder
    argument is optional.

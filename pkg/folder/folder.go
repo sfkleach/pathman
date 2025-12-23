@@ -169,6 +169,36 @@ func IsOnPath(folderPath string) bool {
 	return false
 }
 
+// GetAdjustedPath returns the PATH with the managed folder added if not already present.
+// If atFront is true, adds to the front; otherwise adds to the back.
+func GetAdjustedPath(atFront bool) (string, error) {
+	folderPath, err := GetManagedFolder()
+	if err != nil {
+		return "", fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	pathEnv := os.Getenv("PATH")
+
+	// Check if already on PATH.
+	if IsOnPath(folderPath) {
+		return pathEnv, nil
+	}
+
+	// Add to front or back.
+	if atFront {
+		if pathEnv == "" {
+			return folderPath, nil
+		}
+		return folderPath + string(os.PathListSeparator) + pathEnv, nil
+	}
+
+	// Add to back (default).
+	if pathEnv == "" {
+		return folderPath, nil
+	}
+	return pathEnv + string(os.PathListSeparator) + folderPath, nil
+}
+
 // GetBashProfilePath determines which bash profile file to use.
 // Returns the path to .bash_profile if it exists, otherwise .profile.
 func GetBashProfilePath() (string, error) {

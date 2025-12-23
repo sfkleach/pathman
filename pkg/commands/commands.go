@@ -27,6 +27,7 @@ in a single local folder.`,
 	cmd.AddCommand(NewListCmd())
 	cmd.AddCommand(NewFolderCmd())
 	cmd.AddCommand(NewInitCmd())
+	cmd.AddCommand(NewPathCmd())
 
 	return cmd
 }
@@ -152,6 +153,42 @@ If the folder already exists, check its permissions and warn if insecure.`,
 			return folder.Init()
 		},
 	}
+
+	return cmd
+}
+
+// NewPathCmd creates the path command.
+func NewPathCmd() *cobra.Command {
+	var front bool
+	var back bool
+
+	cmd := &cobra.Command{
+		Use:   "path",
+		Short: "Output PATH with managed folder included",
+		Long: `Check if the managed folder is on $PATH and add it if not.
+By default adds to the back. Use --front to add to the front instead.
+Outputs the adjusted PATH for use in shell configuration.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if front && back {
+				return fmt.Errorf("cannot specify both --front and --back")
+			}
+
+			// Default to back if neither specified.
+			atFront := front
+
+			adjustedPath, err := folder.GetAdjustedPath(atFront)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(adjustedPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&front, "front", false, "Add managed folder to front of PATH")
+	cmd.Flags().BoolVar(&back, "back", false, "Add managed folder to back of PATH (default)")
 
 	return cmd
 }

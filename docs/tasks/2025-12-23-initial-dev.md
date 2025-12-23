@@ -50,9 +50,39 @@ so far.
 
 Implement the `pathman path` subcommand, see below.
 
-## Part N
+## Part 5b
 
-All normal interactive commands should run the safety check. 
+- Ensure that the modification to the profile file (.profile or .bash_profile) 
+  uses `pathname path` rather than hard-codes the managed folder name.
+- And ensure the suggested modification to that file is consistent with this.
+
+## Part 6
+
+- Any command that can take the `--front` or `--back` options will default
+  to using `--back`.
+- Instead of a single managed folder, change to using TWO managed folders:
+  - `pathman-links-front`
+  - `pathman-links-back`
+- To set these folders we use the commands: 
+  - `pathman folder --front --set=PATH`
+  - `pathman folder --back --set=PATH`
+- The `pathman folder [--front] [--back]` command lists the relevant folder.
+- The `pathname` command with no subcommand will now be a synonym for `pathman summary`
+  and will do the following:
+  - List both front and back folders in a human-friendly format
+  - Check the $PATH for all name clashes.
+- The `pathman init` command will set up both folders and, as the name
+  suggests, put one on the front of the $PATH and one on the back of $PATH.
+- The interactive commentary will be adjusted accordingly.
+- Adjust the README.md accordingly.
+- `pathname remove|rm` will remove from either folder.
+- `pathname add` will check both folders and, if appropriate move the 
+  symlink to the correct managed folder.
+
+
+## Part X
+
+All normal interactive commands should run the permissions safety check. 
 
 
 ## Background
@@ -64,19 +94,26 @@ ensure your $PATH is alwys up to date with the executables you need.
 
 Commands are:
 
-- `pathman add <executable>` [--name NAME]: Adds an executable to the managed folder.
+- `pathman add <executable>` [--name NAME]: Adds an executable to a managed folder.
   Optionally, you can specify a different name for the symlink using the `--name` flag.
   Even if supplied in relative form the symlink must be to an absolute path.
+  Optionally takes the `--front` or `--back` options, to determine which  managed
+  folder to add it to.
 
-- `pathman remove <name>`: Removes the symlink with the specified name from the managed folder.
+- `pathman remove <name>`: Removes the symlink with the specified name from 
+  the managed folders.
   Note that `rm` is a synonym for `remove`.
 
-- `pathman list`: Lists all executables currently managed by `pathman`. 
+- `pathman list`: Lists all executables currently managed by `pathman`.
   Note that `ls` is a synonym for `list`. This an unadorned list by default.
   Use the `--long` option to include a link back to the symlinked file.
+  `-l` also lists whether or not it masks another $PATH entry and which 
+  entries it is masked by.
 
-- `pathman folder`: Displays the path to the managed folder. The folder
-   argument is optional. 
+- `pathname rename OLD NEW`: renames a managed symlink.
+
+- `pathman folder`: Displays the path to a managed folder. The folder
+   argument is optional.
 
 - `pathman folder --set <path>`: Sets the managed folder to the specified path,
     creating it if it doesn't exist and saving the configuration in

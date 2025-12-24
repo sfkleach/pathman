@@ -8,8 +8,7 @@ import (
 
 // Config represents the pathman configuration.
 type Config struct {
-	ManagedFolderFront string `json:"managed_folder_front"`
-	ManagedFolderBack  string `json:"managed_folder_back"`
+	ManagedFolder string `json:"managed_folder"`
 }
 
 // GetConfigPath returns the path to the configuration file.
@@ -76,20 +75,11 @@ func (c *Config) Save() error {
 	return os.WriteFile(configPath, data, 0644)
 }
 
-// GetDefaultManagedFolderFront returns the default path for the front managed folder.
-func GetDefaultManagedFolderFront() (string, error) {
+// GetDefaultManagedFolder returns the default path for the managed folder.
+func GetDefaultManagedFolder() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".local", "bin", "pathman-links-front"), nil
-}
-
-// GetDefaultManagedFolderBack returns the default path for the back managed folder.
-func GetDefaultManagedFolderBack() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".local", "bin", "pathman-links-back"), nil
+	return filepath.Join(homeDir, ".local", "bin", "pathman-links"), nil
 }

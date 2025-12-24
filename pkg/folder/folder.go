@@ -13,34 +13,44 @@ import (
 // GetManagedFolder returns the path to the managed folder.
 // It first checks the configuration file, then falls back to the default.
 // atFront determines which folder to return (true for front, false for back).
-func GetManagedFolder(atFront bool) (string, error) {
+func GetManagedFolder() (string, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return "", err
 	}
 
-	if cfg != nil {
-		if atFront && cfg.ManagedFolderFront != "" {
-			return cfg.ManagedFolderFront, nil
-		}
-		if !atFront && cfg.ManagedFolderBack != "" {
-			return cfg.ManagedFolderBack, nil
-		}
+	if cfg != nil && cfg.ManagedFolder != "" {
+		return cfg.ManagedFolder, nil
 	}
 
-	if atFront {
-		return config.GetDefaultManagedFolderFront()
-	}
-	return config.GetDefaultManagedFolderBack()
+	return config.GetDefaultManagedFolder()
 }
 
-// GetBothManagedFolders returns both front and back folder paths.
-func GetBothManagedFolders() (front string, back string, err error) {
-	front, err = GetManagedFolder(true)
+// GetFrontFolder returns the path to the front subfolder.
+func GetFrontFolder() (string, error) {
+	base, err := GetManagedFolder()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "front"), nil
+}
+
+// GetBackFolder returns the path to the back subfolder.
+func GetBackFolder() (string, error) {
+	base, err := GetManagedFolder()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "back"), nil
+}
+
+// GetBothSubfolders returns both front and back subfolder paths.
+func GetBothSubfolders() (front string, back string, err error) {
+	front, err = GetFrontFolder()
 	if err != nil {
 		return "", "", err
 	}
-	back, err = GetManagedFolder(false)
+	back, err = GetBackFolder()
 	if err != nil {
 		return "", "", err
 	}
@@ -62,8 +72,7 @@ func Create(folderPath string) error {
 }
 
 // SetManagedFolder sets the managed folder path in the configuration.
-// atFront determines which folder to set (true for front, false for back).
-func SetManagedFolder(folderPath string, atFront bool) error {
+func SetManagedFolder(folderPath string) error {
 	// Load existing config or create new one.
 	cfg, err := config.Load()
 	if err != nil {
@@ -73,36 +82,36 @@ func SetManagedFolder(folderPath string, atFront bool) error {
 		cfg = &config.Config{}
 	}
 
-	// Set the appropriate folder.
-	if atFront {
-		cfg.ManagedFolderFront = folderPath
-	} else {
-		cfg.ManagedFolderBack = folderPath
-	}
-
+	cfg.ManagedFolder = folderPath
 	return cfg.Save()
 }
 
 // PrintSummary prints a summary of both managed folders and checks for name clashes.
 func PrintSummary() error {
-	frontPath, backPath, err := GetBothManagedFolders()
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder paths: %w", err)
+		return fmt.Errorf("failed to get managed subfolder paths: %w", err)
 	}
 
-	fmt.Println("Pathman Managed Folders:")
+	basePath, err := GetManagedFolder()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	fmt.Println("Pathman Managed Folder:")
+	fmt.Printf("  Base: %s\n", basePath)
 	fmt.Println()
 
-	// Front folder status.
-	fmt.Printf("  Front folder: %s\n", frontPath)
+	// Front subfolder status.
+	fmt.Printf("  Front subfolder: %s\n", frontPath)
 	if Exists(frontPath) {
 		fmt.Println("    Status: exists")
 	} else {
 		fmt.Println("    Status: does not exist")
 	}
 
-	// Back folder status.
-	fmt.Printf("  Back folder:  %s\n", backPath)
+	// Back subfolder status.
+	fmt.Printf("  Back subfolder:  %s\n", backPath)
 	if Exists(backPath) {
 		fmt.Println("    Status: exists")
 	} else {
@@ -112,7 +121,7 @@ func PrintSummary() error {
 	// Check if they exist before checking clashes.
 	if !Exists(frontPath) && !Exists(backPath) {
 		fmt.Println()
-		fmt.Println("Run 'pathman init' to create the managed folders.")
+		fmt.Println("Run 'pathman init' to create the managed folder.")
 		return nil
 	}
 
@@ -133,9 +142,9 @@ func PrintSummary() error {
 	return nil
 }
 
-// CheckNameClashes checks for executables with the same name in both folders.
+// CheckNameClashes checks for executables with the same name in both subfolders.
 func CheckNameClashes() ([]string, error) {
-	frontPath, backPath, err := GetBothManagedFolders()
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
 		return nil, err
 	}
@@ -178,30 +187,70 @@ func CheckNameClashes() ([]string, error) {
 // If the folders exist, it checks permissions and warns if insecure.
 // It also checks if the folders are on $PATH and offers to add them for bash users.
 func Init() error {
-	frontPath, backPath, err := GetBothManagedFolders()
+	basePath, err := GetManagedFolder()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder paths: %w", err)
+		return fmt.Errorf("failed to get managed folder path: %w", err)
 	}
 
-	// Initialize front folder.
-	frontCreated, err := initFolder(frontPath, "front")
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
 	}
 
-	// Initialize back folder.
-	backCreated, err := initFolder(backPath, "back")
-	if err != nil {
-		return err
+	// Check/create base folder.
+	baseCreated := false
+	if Exists(basePath) {
+		info, err := os.Stat(basePath)
+		if err != nil {
+			return fmt.Errorf("failed to stat folder: %w", err)
+		}
+
+		perm := info.Mode().Perm()
+		if perm&0022 != 0 {
+			fmt.Printf("Managed folder already exists: %s\n", basePath)
+			fmt.Printf("WARNING: Folder has insecure permissions: %04o\n", perm)
+			fmt.Println("Group or others have write permission. This is a security risk.")
+			fmt.Println("Recommended permissions: 0755 (owner read/write/execute, all read/execute)")
+		} else {
+			fmt.Printf("Managed folder already exists: %s\n", basePath)
+			fmt.Printf("Permissions are correct: %04o\n", perm)
+		}
+	} else {
+		if err := os.MkdirAll(basePath, 0755); err != nil {
+			return fmt.Errorf("failed to create folder: %w", err)
+		}
+		fmt.Printf("Created managed folder: %s\n", basePath)
+		fmt.Printf("Permissions set to: 0755 (owner read/write/execute, all read/execute)\n")
+		baseCreated = true
 	}
 
-	// Check if folders are on $PATH.
+	// Create front subfolder.
+	frontCreated := false
+	if !Exists(frontPath) {
+		if err := os.MkdirAll(frontPath, 0755); err != nil {
+			return fmt.Errorf("failed to create front subfolder: %w", err)
+		}
+		fmt.Printf("Created front subfolder: %s\n", frontPath)
+		frontCreated = true
+	}
+
+	// Create back subfolder.
+	backCreated := false
+	if !Exists(backPath) {
+		if err := os.MkdirAll(backPath, 0755); err != nil {
+			return fmt.Errorf("failed to create back subfolder: %w", err)
+		}
+		fmt.Printf("Created back subfolder: %s\n", backPath)
+		backCreated = true
+	}
+
+	// Check if subfolders are on $PATH.
 	frontOnPath := IsOnPath(frontPath)
 	backOnPath := IsOnPath(backPath)
 
 	if !frontOnPath || !backOnPath {
 		fmt.Println()
-		fmt.Println("The managed folders are not properly configured in your $PATH.")
+		fmt.Println("The managed subfolders are not properly configured in your $PATH.")
 		fmt.Println("To use executables in these folders, you need to add them to your $PATH.")
 
 		// Check if the user is using bash.
@@ -230,50 +279,12 @@ func Init() error {
 			fmt.Println("\nTo add it to your PATH, add this line to your shell configuration:")
 			fmt.Println("  export PATH=$(pathman path)")
 		}
-	} else if frontCreated || backCreated {
+	} else if baseCreated || frontCreated || backCreated {
 		fmt.Println()
-		fmt.Println("The managed folders are already properly configured in your $PATH.")
+		fmt.Println("The managed folder is already properly configured in your $PATH.")
 	}
 
 	return nil
-}
-
-// initFolder initializes a single folder (helper for Init).
-func initFolder(folderPath, label string) (bool, error) {
-	folderCreated := false
-
-	if Exists(folderPath) {
-		// Folder exists, check permissions.
-		info, err := os.Stat(folderPath)
-		if err != nil {
-			return false, fmt.Errorf("failed to stat folder: %w", err)
-		}
-
-		mode := info.Mode()
-		perm := mode.Perm()
-
-		// Check if group or others have write permission.
-		if perm&0022 != 0 {
-			fmt.Printf("Managed folder (%s) already exists: %s\n", label, folderPath)
-			fmt.Printf("WARNING: Folder has insecure permissions: %04o\n", perm)
-			fmt.Println("Group or others have write permission. This is a security risk.")
-			fmt.Println("Recommended permissions: 0755 (owner read/write/execute, all read/execute)")
-		} else {
-			fmt.Printf("Managed folder (%s) already exists: %s\n", label, folderPath)
-			fmt.Printf("Permissions are correct: %04o\n", perm)
-		}
-	} else {
-		// Create the folder with permissions: owner read+write+execute, all read+execute (0755).
-		if err := os.MkdirAll(folderPath, 0755); err != nil {
-			return false, fmt.Errorf("failed to create folder: %w", err)
-		}
-
-		fmt.Printf("Created managed folder (%s): %s\n", label, folderPath)
-		fmt.Printf("Permissions set to: 0755 (owner read/write/execute, all read/execute)\n")
-		folderCreated = true
-	}
-
-	return folderCreated, nil
 }
 
 // IsOnPath checks if the given folder path is on the $PATH.
@@ -300,18 +311,18 @@ func IsOnPath(folderPath string) bool {
 // GetAdjustedPath returns the PATH with the managed folder added if not already present.
 // If atFront is true, adds to the front; otherwise adds to the back.
 func GetAdjustedPath() (string, error) {
-	frontPath, backPath, err := GetBothManagedFolders()
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
-		return "", fmt.Errorf("failed to get managed folder paths: %w", err)
+		return "", fmt.Errorf("failed to get subfolder paths: %w", err)
 	}
 
 	pathEnv := os.Getenv("PATH")
 	if pathEnv == "" {
-		// Empty PATH: just add both folders.
+		// Empty PATH: just add both subfolders.
 		return frontPath + string(os.PathListSeparator) + backPath, nil
 	}
 
-	// Remove any existing occurrences of both folders from PATH.
+	// Remove any existing occurrences of both subfolders from PATH.
 	pathParts := strings.Split(pathEnv, string(os.PathListSeparator))
 	var cleanedParts []string
 	for _, part := range pathParts {
@@ -320,7 +331,7 @@ func GetAdjustedPath() (string, error) {
 		}
 	}
 
-	// Build new PATH: front folder + cleaned parts + back folder.
+	// Build new PATH: front subfolder + cleaned parts + back subfolder.
 	var newPath string
 	if len(cleanedParts) == 0 {
 		newPath = frontPath + string(os.PathListSeparator) + backPath
@@ -442,18 +453,26 @@ func PromptUser(question string) (bool, error) {
 
 // List returns a list of all symlinks in the managed folder.
 func List(atFront bool) ([]string, error) {
-	folderPath, err := GetManagedFolder(atFront)
+	var folderPath string
+	var err error
+
+	if atFront {
+		folderPath, err = GetFrontFolder()
+	} else {
+		folderPath, err = GetBackFolder()
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
+		return nil, fmt.Errorf("failed to get subfolder path: %w", err)
 	}
 
 	if !Exists(folderPath) {
-		return nil, fmt.Errorf("managed folder does not exist: %s", folderPath)
+		return nil, fmt.Errorf("subfolder does not exist: %s", folderPath)
 	}
 
 	entries, err := os.ReadDir(folderPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read managed folder: %w", err)
+		return nil, fmt.Errorf("failed to read subfolder: %w", err)
 	}
 
 	var symlinks []string
@@ -478,20 +497,28 @@ type SymlinkInfo struct {
 	Target string
 }
 
-// ListLong returns detailed information about all symlinks in the managed folder.
+// ListLong returns detailed information about all symlinks in the managed subfolder.
 func ListLong(atFront bool) ([]SymlinkInfo, error) {
-	folderPath, err := GetManagedFolder(atFront)
+	var folderPath string
+	var err error
+
+	if atFront {
+		folderPath, err = GetFrontFolder()
+	} else {
+		folderPath, err = GetBackFolder()
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
+		return nil, fmt.Errorf("failed to get subfolder path: %w", err)
 	}
 
 	if !Exists(folderPath) {
-		return nil, fmt.Errorf("managed folder does not exist: %s", folderPath)
+		return nil, fmt.Errorf("subfolder does not exist: %s", folderPath)
 	}
 
 	entries, err := os.ReadDir(folderPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read managed folder: %w", err)
+		return nil, fmt.Errorf("failed to read subfolder: %w", err)
 	}
 
 	var symlinks []SymlinkInfo
@@ -517,16 +544,28 @@ func ListLong(atFront bool) ([]SymlinkInfo, error) {
 	return symlinks, nil
 }
 
-// Add creates a symlink to the executable in the managed folder.
-// If a symlink with the same name exists in the other folder, it's moved to the specified folder.
+// Add creates a symlink to the executable in the managed subfolder.
+// If a symlink with the same name exists in the other subfolder, it's moved to the specified subfolder.
 func Add(executablePath, name string, atFront bool) error {
-	folderPath, err := GetManagedFolder(atFront)
-	if err != nil {
-		return fmt.Errorf("failed to get managed folder path: %w", err)
+	var folderPath, otherFolderPath string
+	var err error
+
+	if atFront {
+		folderPath, err = GetFrontFolder()
+		if err != nil {
+			return fmt.Errorf("failed to get front subfolder path: %w", err)
+		}
+		otherFolderPath, _ = GetBackFolder()
+	} else {
+		folderPath, err = GetBackFolder()
+		if err != nil {
+			return fmt.Errorf("failed to get back subfolder path: %w", err)
+		}
+		otherFolderPath, _ = GetFrontFolder()
 	}
 
 	if !Exists(folderPath) {
-		return fmt.Errorf("managed folder does not exist: %s\nRun 'pathman init' to create it", folderPath)
+		return fmt.Errorf("subfolder does not exist: %s\nRun 'pathman init' to create it", folderPath)
 	}
 
 	// Get absolute path of the executable.
@@ -554,19 +593,18 @@ func Add(executablePath, name string, atFront bool) error {
 
 	symlinkPath := filepath.Join(folderPath, symlinkName)
 
-	// Check if symlink already exists in the target folder.
+	// Check if symlink already exists in the target subfolder.
 	if _, err := os.Lstat(symlinkPath); err == nil {
 		return fmt.Errorf("symlink already exists: %s", symlinkName)
 	}
 
-	// Check if symlink exists in the other folder and remove it if so.
-	otherFolderPath, err := GetManagedFolder(!atFront)
-	if err == nil && Exists(otherFolderPath) {
+	// Check if symlink exists in the other subfolder and remove it if so.
+	if Exists(otherFolderPath) {
 		otherSymlinkPath := filepath.Join(otherFolderPath, symlinkName)
 		if _, err := os.Lstat(otherSymlinkPath); err == nil {
-			// Symlink exists in other folder, remove it.
+			// Symlink exists in other subfolder, remove it.
 			if err := os.Remove(otherSymlinkPath); err != nil {
-				return fmt.Errorf("failed to remove symlink from other folder: %w", err)
+				return fmt.Errorf("failed to remove symlink from other subfolder: %w", err)
 			}
 			fromLabel := map[bool]string{true: "front", false: "back"}[!atFront]
 			toLabel := map[bool]string{true: "front", false: "back"}[atFront]
@@ -584,14 +622,14 @@ func Add(executablePath, name string, atFront bool) error {
 	return nil
 }
 
-// Remove removes a symlink from the managed folders (searches both front and back).
+// Remove removes a symlink from the managed subfolders (searches both front and back).
 func Remove(name string) error {
-	frontPath, backPath, err := GetBothManagedFolders()
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder paths: %w", err)
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
 	}
 
-	// Try front folder first.
+	// Try front subfolder first.
 	if Exists(frontPath) {
 		symlinkPath := filepath.Join(frontPath, name)
 		if info, err := os.Lstat(symlinkPath); err == nil {
@@ -608,7 +646,7 @@ func Remove(name string) error {
 		}
 	}
 
-	// Try back folder.
+	// Try back subfolder.
 	if Exists(backPath) {
 		symlinkPath := filepath.Join(backPath, name)
 		if info, err := os.Lstat(symlinkPath); err == nil {
@@ -628,14 +666,14 @@ func Remove(name string) error {
 	return fmt.Errorf("symlink does not exist: %s", name)
 }
 
-// Rename renames a symlink in the managed folders (searches both front and back).
+// Rename renames a symlink in the managed subfolders (searches both front and back).
 func Rename(oldName, newName string) error {
-	frontPath, backPath, err := GetBothManagedFolders()
+	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder paths: %w", err)
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
 	}
 
-	// Try front folder first.
+	// Try front subfolder first.
 	if Exists(frontPath) {
 		oldSymlinkPath := filepath.Join(frontPath, oldName)
 		if info, err := os.Lstat(oldSymlinkPath); err == nil {
@@ -659,7 +697,7 @@ func Rename(oldName, newName string) error {
 		}
 	}
 
-	// Try back folder.
+	// Try back subfolder.
 	if Exists(backPath) {
 		oldSymlinkPath := filepath.Join(backPath, oldName)
 		if info, err := os.Lstat(oldSymlinkPath); err == nil {

@@ -29,6 +29,7 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewPathCmd())
 	cmd.AddCommand(NewRenameCmd())
+	cmd.AddCommand(NewSummaryCmd())
 
 	return cmd
 }
@@ -94,7 +95,7 @@ func NewListCmd() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List all managed executables",
-		Long:    `List all symlinks currently managed by pathman.
+		Long: `List all symlinks currently managed by pathman.
 Use --front to list from the front folder or --back to list from the back folder (default).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -149,26 +150,23 @@ With --set, you must also specify either --front or --back.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if setPath != "" {
-				// Setting folder path requires --front or --back.
-				if !front && !back {
-					return fmt.Errorf("--set requires either --front or --back")
-				}
-				if front && back {
-					return fmt.Errorf("cannot specify both --front and --back")
-				}
-
-				atFront := front
-				if err := folder.SetManagedFolder(setPath, atFront); err != nil {
+				// Setting base folder path.
+				if err := folder.SetManagedFolder(setPath); err != nil {
 					return err
 				}
 
-				folderLabel := map[bool]string{true: "front", false: "back"}[atFront]
-				fmt.Printf("Set %s folder to: %s\n", folderLabel, setPath)
+				fmt.Printf("Set managed folder to: %s\n", setPath)
 				return nil
 			}
 
-			// Default: show folder summary.
-			return folder.PrintSummary()
+			// Default: list both subfolder paths, one per line.
+			frontPath, backPath, err := folder.GetBothSubfolders()
+			if err != nil {
+				return err
+			}
+			fmt.Println(frontPath)
+			fmt.Println(backPath)
+			return nil
 		},
 	}
 
@@ -230,6 +228,21 @@ func NewRenameCmd() *cobra.Command {
 			oldName := args[0]
 			newName := args[1]
 			return folder.Rename(oldName, newName)
+		},
+	}
+
+	return cmd
+}
+
+// NewSummaryCmd creates the summary command.
+func NewSummaryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summary",
+		Short: "Display a summary of both managed folders",
+		Long:  `Display the paths and status of both managed folders, including any name clashes.`,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return folder.PrintSummary()
 		},
 	}
 

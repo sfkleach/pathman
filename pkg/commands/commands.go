@@ -31,7 +31,7 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewGetCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewSummaryCmd())
-	cmd.AddCommand(NewSummaryCmd())
+	cmd.AddCommand(NewCleanCmd())
 
 	return cmd
 }

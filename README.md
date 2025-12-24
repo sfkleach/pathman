@@ -4,6 +4,48 @@ Pathman is a command-line tool that helps you manage the list of applications
 accessible by $PATH. With `pathman`, you can add individual executables to the
 front or back of your $PATH, remove them, list them and detect path clashes.
 
+## Example 1, ~/.cargo/bin
+
+Rust's `cargo` is great - but you need to add the `~/.cargo/bin` folder to your $PATH, 
+which usually means editing your .profile (or was it .bash_profile on
+this system?). Pathman lets you add a folder to your path with a single command
+without editing your profile files.
+
+```sh
+pathman add ~/.cargo/bin
+```
+
+Pathman will also check whether or not adding ~/.cargo/bin to your $PATH will
+cause any system executables to be masked or, equally unfortunately, whether
+the ~/.cargo/bin executables will be masked by something else.
+
+## Example 2, random application
+
+For example, let's suppose you download a zip file `foozle.zip` for the
+imaginary command-line application `foozle`. When you unpack it you find it has
+a fairly typical structure with a single executable like this:
+
+```
+❯ tree foozle/
+foozle/
+├── bin
+│   └── foozle
+└── share
+    ├── data1
+    ├── data2
+    └── data3
+```
+
+You find somewhere to put it, maybe `~/.local/foozle` and now you want to add
+the binary to your $PATH. You could, of course, manually add a symlink to 
+`~/.local/bin`. Except then you discover that isn't on your $PATH either!
+
+Alternatively you could use `pathman add ~/.local/foozle/bin/foozle`. This
+symlinks the single executable into pathman's own managed folders. You can
+review the state of health of your managed path at any point - and when you get
+rid of the foozle app, `pathman clean` can easily clean up broken symlinks or
+even missing folders.
+
 
 ## Commands
 
@@ -26,6 +68,8 @@ front or back of your $PATH, remove them, list them and detect path clashes.
 - `pathman summary`: Shows a summary of the managed folder, both subfolders with symlink counts, and any naming conflicts (folder clashes or PATH clashes).
 
 - `pathman` (no arguments): Shows the same summary as `pathman summary`.
+
+- `pathman clean`: detects broken symlinks and missing directories and helps you to delete them interactively.
 
 ## Implementation
 

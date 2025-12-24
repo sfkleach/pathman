@@ -18,7 +18,8 @@ type Config struct {
 }
 
 // GetDefaultManagedFolder returns the default path for the managed folder.
-func GetDefaultManagedFolder() (string, error) {
+// This is a variable to allow tests to override it.
+var GetDefaultManagedFolder = func() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -27,7 +28,8 @@ func GetDefaultManagedFolder() (string, error) {
 }
 
 // GetConfigPath returns the path to the configuration file.
-func GetConfigPath() (string, error) {
+// This is a variable to allow tests to override it.
+var GetConfigPath = func() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

@@ -3,12 +3,7 @@
 **Goal**: As a user, I can manage folders with `pathman` such as `~/.cargo/bin`,
 `~/go/bin`, `~/.dotnet/tools` etc.
 
-Implementation note: the folders are added to or removed from a configuration
-file in JSON or YAML format that manages the items and their priorities. 
-
-Question: Because this configuration file is edited directly by `pathman` I think it 
-should be in the managed folder rather than be treated as a normal configuration
-file i.e. more like data. What is the recommended approach?
+Implementation note: the folders are added to or removed from the pathman configuration file.
 
 ## Features
 
@@ -31,3 +26,9 @@ file i.e. more like data. What is the recommended approach?
   and then add them back into the $PATH on the front or back depending on
   the priority. The managed subfolders are always first and last, the managed
   directories follow and precede them.
+
+- `pathman [summary]`, the subcommand `summary` will list the configured
+  directories. In addition it will perform a health check on those directories
+  (do they exist? do they have good permissions?) including finding if any
+  of their executable files mask or are masked by other path members, reporting
+  any clashes, as before.

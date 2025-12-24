@@ -95,10 +95,10 @@ func NewListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List all managed executables",
-		Long: `List all symlinks currently managed by pathman.
+		Short:   "List all managed executables and directories",
+		Long: `List all symlinks and directories currently managed by pathman.
 Use --priority to list only from 'front' or 'back' folder.
-Without --priority, lists from both folders.`,
+Without --priority, lists from both folders and all managed directories.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if priority != "" && priority != "front" && priority != "back" {
@@ -108,28 +108,40 @@ Without --priority, lists from both folders.`,
 			// If priority not specified, list from both.
 			if priority == "" {
 				if long {
-					symlinks, err := folder.ListLongBoth()
+					symlinks, dirs, err := folder.ListLongBothWithDirs()
 					if err != nil {
 						return err
 					}
 
+					// Print symlinks.
 					for _, info := range symlinks {
 						fmt.Printf("%-5s  %s -> %s\n", info.Priority, info.Name, info.Target)
 					}
+
+					// Print directories.
+					for _, dir := range dirs {
+						fmt.Printf("%-5s  %s/\n", dir.Priority, dir.Path)
+					}
 				} else {
-					symlinks, err := folder.ListBoth()
+					symlinks, dirs, err := folder.ListBothWithDirs()
 					if err != nil {
 						return err
 					}
 
+					// Print symlinks.
 					for _, name := range symlinks {
 						fmt.Println(name)
+					}
+
+					// Print directories.
+					for _, dir := range dirs {
+						fmt.Printf("%s/\n", dir.Path)
 					}
 				}
 				return nil
 			}
 
-			// List from specific folder.
+			// List from specific folder (symlinks only, no directories filtered by priority here).
 			atFront := priority == "front"
 
 			if long {

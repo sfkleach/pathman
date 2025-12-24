@@ -120,6 +120,12 @@ func PrintSummary() error {
 		return fmt.Errorf("failed to get managed folder path: %w", err)
 	}
 
+	// Load managed directories.
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
 	fmt.Println("Pathman Managed Folder:")
 	fmt.Printf("  Base: %s", basePath)
 	if !Exists(basePath) {
@@ -147,6 +153,28 @@ func PrintSummary() error {
 	}
 	fmt.Printf("  Back subfolder:  %s (%d symlinks)\n", backPath, backCount)
 
+	// Show managed directories.
+	fmt.Println()
+	if len(cfg.ManagedDirectories) > 0 {
+		fmt.Printf("Managed Directories (%d):\n", len(cfg.ManagedDirectories))
+		for _, dir := range cfg.ManagedDirectories {
+			fmt.Printf("  [%s] %s", dir.Priority, dir.Path)
+			// Health check: does it exist?
+			if info, err := os.Stat(dir.Path); err != nil {
+				if os.IsNotExist(err) {
+					fmt.Print(" (does not exist)")
+				} else {
+					fmt.Printf(" (error: %v)", err)
+				}
+			} else if !info.IsDir() {
+				fmt.Print(" (not a directory)")
+			}
+			fmt.Println()
+		}
+	} else {
+		fmt.Println("No managed directories.")
+	}
+
 	// Check for conflicts.
 	fmt.Println()
 
@@ -156,8 +184,8 @@ func PrintSummary() error {
 		return fmt.Errorf("failed to check name clashes: %w", err)
 	}
 
-	// Check for PATH clashes.
-	pathClashes, err := CheckPathClashes()
+	// Check for PATH clashes (including managed directories).
+	pathClashes, err := CheckPathClashesWithDirs()
 	if err != nil {
 		return fmt.Errorf("failed to check PATH clashes: %w", err)
 	}
@@ -287,6 +315,118 @@ func CheckPathClashes() ([]string, error) {
 					clashes = append(clashes, fmt.Sprintf("%s (masks %s)", symlink.Name, execPath))
 				}
 				break // Only report first clash per symlink.
+			}
+		}
+	}
+
+	return clashes, nil
+}
+
+// CheckPathClashesWithDirs checks if any managed symlinks or executables in managed directories
+// mask or are masked by executables elsewhere on PATH.
+func CheckPathClashesWithDirs() ([]string, error) {
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return nil, nil
+	}
+
+	pathDirs := filepath.SplitList(pathEnv)
+	frontFolder, _ := GetFrontFolder()
+	backFolder, _ := GetBackFolder()
+
+	// Load managed directories.
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Build set of all managed paths.
+	managedPaths := make(map[string]bool)
+	managedPaths[frontFolder] = true
+	managedPaths[backFolder] = true
+	for _, dir := range cfg.ManagedDirectories {
+		managedPaths[dir.Path] = true
+	}
+
+	// Collect all executables from managed folders and directories.
+	type ManagedExec struct {
+		Name     string
+		Path     string
+		Priority string
+	}
+	var managedExecs []ManagedExec
+
+	// Get symlinks from front and back.
+	allSymlinks, err := ListLongBoth()
+	if err != nil {
+		return nil, err
+	}
+	for _, symlink := range allSymlinks {
+		managedExecs = append(managedExecs, ManagedExec{
+			Name:     symlink.Name,
+			Path:     frontFolder,
+			Priority: symlink.Priority,
+		})
+	}
+
+	// Get executables from managed directories.
+	for _, dir := range cfg.ManagedDirectories {
+		if info, err := os.Stat(dir.Path); err == nil && info.IsDir() {
+			entries, err := os.ReadDir(dir.Path)
+			if err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() {
+						entryPath := filepath.Join(dir.Path, entry.Name())
+						if info, err := os.Stat(entryPath); err == nil && info.Mode()&0111 != 0 {
+							// File is executable.
+							managedExecs = append(managedExecs, ManagedExec{
+								Name:     entry.Name(),
+								Path:     dir.Path,
+								Priority: dir.Priority,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	var clashes []string
+
+	for _, exec := range managedExecs {
+		// Find where this executable's directory is in PATH.
+		var execPosition int = -1
+
+		for i, dir := range pathDirs {
+			if dir == exec.Path {
+				execPosition = i
+				break
+			}
+		}
+
+		if execPosition == -1 {
+			// Not in PATH, skip checking.
+			continue
+		}
+
+		// Check all PATH directories for the same executable name.
+		for i, dir := range pathDirs {
+			// Skip managed paths.
+			if managedPaths[dir] {
+				continue
+			}
+
+			execPath := filepath.Join(dir, exec.Name)
+			if _, err := os.Stat(execPath); err == nil {
+				// Found executable with same name.
+				if i < execPosition {
+					// Executable comes before our managed one - ours is masked.
+					clashes = append(clashes, fmt.Sprintf("%s (masked by %s)", exec.Name, execPath))
+				} else {
+					// Our managed executable comes before - we mask it.
+					clashes = append(clashes, fmt.Sprintf("%s (masks %s)", exec.Name, execPath))
+				}
+				break // Only report first clash per executable.
 			}
 		}
 	}
@@ -454,32 +594,61 @@ func GetAdjustedPath() (string, error) {
 		return "", fmt.Errorf("failed to get subfolder paths: %w", err)
 	}
 
-	pathEnv := os.Getenv("PATH")
-	if pathEnv == "" {
-		// Empty PATH: just add both subfolders.
-		return frontPath + string(os.PathListSeparator) + backPath, nil
+	// Load managed directories from config.
+	cfg, err := config.Load()
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Remove any existing occurrences of both subfolders from PATH.
+	// Separate directories by priority.
+	var frontDirs []string
+	var backDirs []string
+	for _, dir := range cfg.ManagedDirectories {
+		if dir.Priority == "front" {
+			frontDirs = append(frontDirs, dir.Path)
+		} else {
+			backDirs = append(backDirs, dir.Path)
+		}
+	}
+
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		// Empty PATH: add managed folders and directories.
+		parts := []string{frontPath}
+		parts = append(parts, frontDirs...)
+		parts = append(parts, backDirs...)
+		parts = append(parts, backPath)
+		return strings.Join(parts, string(os.PathListSeparator)), nil
+	}
+
+	// Build set of all managed paths to remove.
+	managedPaths := make(map[string]bool)
+	managedPaths[frontPath] = true
+	managedPaths[backPath] = true
+	for _, dir := range cfg.ManagedDirectories {
+		managedPaths[dir.Path] = true
+	}
+
+	// Remove any existing occurrences of managed paths from PATH.
 	pathParts := strings.Split(pathEnv, string(os.PathListSeparator))
 	var cleanedParts []string
 	for _, part := range pathParts {
-		if part != frontPath && part != backPath {
+		if !managedPaths[part] {
 			cleanedParts = append(cleanedParts, part)
 		}
 	}
 
-	// Build new PATH: front subfolder + cleaned parts + back subfolder.
-	var newPath string
-	if len(cleanedParts) == 0 {
-		newPath = frontPath + string(os.PathListSeparator) + backPath
-	} else {
-		newPath = frontPath + string(os.PathListSeparator) +
-			strings.Join(cleanedParts, string(os.PathListSeparator)) +
-			string(os.PathListSeparator) + backPath
+	// Build new PATH: front subfolder + front dirs + cleaned parts + back dirs + back subfolder.
+	var newPathParts []string
+	newPathParts = append(newPathParts, frontPath)
+	newPathParts = append(newPathParts, frontDirs...)
+	if len(cleanedParts) > 0 {
+		newPathParts = append(newPathParts, cleanedParts...)
 	}
+	newPathParts = append(newPathParts, backDirs...)
+	newPathParts = append(newPathParts, backPath)
 
-	return newPath, nil
+	return strings.Join(newPathParts, string(os.PathListSeparator)), nil
 }
 
 // GetBashProfilePath determines which bash profile file to use.
@@ -807,9 +976,127 @@ func ListLongBoth() ([]SymlinkInfo, error) {
 	return allSymlinks, nil
 }
 
+// DirInfo represents information about a managed directory.
+type DirInfo struct {
+	Path     string
+	Priority string
+}
+
+// ListBothWithDirs returns symlink names and managed directories.
+func ListBothWithDirs() ([]string, []DirInfo, error) {
+	symlinks, err := ListBoth()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	var dirs []DirInfo
+	for _, dir := range cfg.ManagedDirectories {
+		dirs = append(dirs, DirInfo{
+			Path:     dir.Path,
+			Priority: dir.Priority,
+		})
+	}
+
+	return symlinks, dirs, nil
+}
+
+// ListLongBothWithDirs returns detailed symlink information and managed directories.
+func ListLongBothWithDirs() ([]SymlinkInfo, []DirInfo, error) {
+	symlinks, err := ListLongBoth()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	var dirs []DirInfo
+	for _, dir := range cfg.ManagedDirectories {
+		dirs = append(dirs, DirInfo{
+			Path:     dir.Path,
+			Priority: dir.Priority,
+		})
+	}
+
+	return symlinks, dirs, nil
+}
+
 // Add creates a symlink to the executable in the managed subfolder.
 // If a symlink with the same name exists in the other subfolder, it's moved to the specified subfolder.
 func Add(executablePath, name string, atFront bool, force bool) error {
+	// Get absolute path first.
+	absPath, err := filepath.Abs(executablePath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Check if the path exists.
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %s", absPath)
+	}
+
+	// If it's a directory, add to config.
+	if info.IsDir() {
+		return addDirectory(absPath, atFront)
+	}
+
+	// Otherwise, add as symlink (existing behavior).
+	return addSymlink(absPath, name, atFront, force)
+}
+
+// addDirectory adds a directory to the managed directories in config.
+func addDirectory(absPath string, atFront bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	priority := "back"
+	if atFront {
+		priority = "front"
+	}
+
+	// Check if directory is already managed.
+	for i, dir := range cfg.ManagedDirectories {
+		if dir.Path == absPath {
+			if dir.Priority == priority {
+				fmt.Printf("Directory already managed with priority '%s': %s\n", priority, absPath)
+				return nil
+			}
+			// Update priority.
+			cfg.ManagedDirectories[i].Priority = priority
+			if err := cfg.Save(); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
+			}
+			fmt.Printf("Updated directory priority to '%s': %s\n", priority, absPath)
+			return nil
+		}
+	}
+
+	// Add new directory.
+	cfg.ManagedDirectories = append(cfg.ManagedDirectories, config.ManagedDirectory{
+		Path:     absPath,
+		Priority: priority,
+	})
+
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("Added directory (%s): %s\n", priority, absPath)
+	return nil
+}
+
+// addSymlink adds a file as a symlink (original Add behavior).
+func addSymlink(absExecutablePath, name string, atFront bool, force bool) error {
 	var folderPath, otherFolderPath string
 	var err error
 
@@ -829,23 +1116,6 @@ func Add(executablePath, name string, atFront bool, force bool) error {
 
 	if !Exists(folderPath) {
 		return fmt.Errorf("subfolder does not exist: %s\nRun 'pathman init' to create it", folderPath)
-	}
-
-	// Get absolute path of the executable.
-	absExecutablePath, err := filepath.Abs(executablePath)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
-	}
-
-	// Check if the executable exists.
-	info, err := os.Stat(absExecutablePath)
-	if err != nil {
-		return fmt.Errorf("executable does not exist: %s", absExecutablePath)
-	}
-
-	// Check if it's a regular file or symlink (not a directory).
-	if info.IsDir() {
-		return fmt.Errorf("cannot add directory: %s", absExecutablePath)
 	}
 
 	// Determine the symlink name.
@@ -900,6 +1170,22 @@ func Add(executablePath, name string, atFront bool, force bool) error {
 
 // Remove removes a symlink from the managed subfolders (searches both front and back).
 func Remove(name string) error {
+	// First, try to remove as a symlink.
+	if err := removeSymlink(name); err == nil {
+		return nil
+	}
+
+	// If not found as symlink, try to remove as a managed directory.
+	absPath, err := filepath.Abs(name)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	return removeDirectory(absPath)
+}
+
+// removeSymlink removes a symlink from the managed subfolders.
+func removeSymlink(name string) error {
 	frontPath, backPath, err := GetBothSubfolders()
 	if err != nil {
 		return fmt.Errorf("failed to get subfolder paths: %w", err)
@@ -940,6 +1226,28 @@ func Remove(name string) error {
 	}
 
 	return fmt.Errorf("symlink does not exist: %s", name)
+}
+
+// removeDirectory removes a directory from the managed directories in config.
+func removeDirectory(absPath string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Find and remove the directory.
+	for i, dir := range cfg.ManagedDirectories {
+		if dir.Path == absPath {
+			cfg.ManagedDirectories = append(cfg.ManagedDirectories[:i], cfg.ManagedDirectories[i+1:]...)
+			if err := cfg.Save(); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
+			}
+			fmt.Printf("Removed directory: %s\n", absPath)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("not found as symlink or managed directory: %s", absPath)
 }
 
 // Rename renames a symlink in the managed subfolders (searches both front and back).

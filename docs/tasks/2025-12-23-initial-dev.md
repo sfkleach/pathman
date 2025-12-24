@@ -63,7 +63,7 @@ is effectively CRUD for our managed folder.
 - `pathname list|ls` will list all the commands in a simple list but the `--long` or `-l` will
   add the priority (front/back) and the file it is linked to. The commands are
   listed in alphabetical order. By adding `--front` or `--back` options the
-  list is restricted by priority - both options are not allowed.
+  list is restricted by priority - both options are not allowed. 
 
 
 ## Part D
@@ -79,7 +79,7 @@ Implement the `pathman path` subcommand. This is to support this use-case:
 ## Part E
 
 Implement the `pathman rename|mv OLD NEW` command and the `pathman priority NAME`
-and `pathman priority NAME=VALUE` commands.
+and `pathman priority NAME=front|back` commands.
 
 ## Part F
 

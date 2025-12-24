@@ -97,14 +97,39 @@ func NewListCmd() *cobra.Command {
 		Aliases: []string{"ls"},
 		Short:   "List all managed executables",
 		Long: `List all symlinks currently managed by pathman.
-Use --front to list from the front folder or --back to list from the back folder (default).`,
+Use --front to list only from the front folder or --back to list only from the back folder.
+Without flags, lists from both folders.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if front && back {
 				return fmt.Errorf("cannot specify both --front and --back")
 			}
 
-			// Default to back if neither specified.
+			// If neither flag specified, list from both.
+			if !front && !back {
+				if long {
+					symlinks, err := folder.ListLongBoth()
+					if err != nil {
+						return err
+					}
+
+					for _, info := range symlinks {
+						fmt.Printf("%-5s  %s -> %s\n", info.Priority, info.Name, info.Target)
+					}
+				} else {
+					symlinks, err := folder.ListBoth()
+					if err != nil {
+						return err
+					}
+
+					for _, name := range symlinks {
+						fmt.Println(name)
+					}
+				}
+				return nil
+			}
+
+			// List from specific folder.
 			atFront := front
 
 			if long {
@@ -114,7 +139,7 @@ Use --front to list from the front folder or --back to list from the back folder
 				}
 
 				for _, info := range symlinks {
-					fmt.Printf("%s -> %s\n", info.Name, info.Target)
+					fmt.Printf("%-5s  %s -> %s\n", info.Priority, info.Name, info.Target)
 				}
 			} else {
 				symlinks, err := folder.List(atFront)
@@ -130,9 +155,9 @@ Use --front to list from the front folder or --back to list from the back folder
 		},
 	}
 
-	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets")
-	cmd.Flags().BoolVar(&front, "front", false, "List from front folder")
-	cmd.Flags().BoolVar(&back, "back", false, "List from back folder (default)")
+	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets and priority")
+	cmd.Flags().BoolVar(&front, "front", false, "List only from front folder")
+	cmd.Flags().BoolVar(&back, "back", false, "List only from back folder")
 
 	return cmd
 }

@@ -120,43 +120,66 @@ func PrintSummary() error {
 	}
 
 	fmt.Println("Pathman Managed Folder:")
-	fmt.Printf("  Base: %s\n", basePath)
+	fmt.Printf("  Base: %s", basePath)
+	if !Exists(basePath) {
+		fmt.Print(" (does not exist - run 'pathman init' to create)")
+	}
 	fmt.Println()
 
-	// Front subfolder status.
-	fmt.Printf("  Front subfolder: %s\n", frontPath)
+	// Count symlinks in front folder.
+	frontCount := 0
 	if Exists(frontPath) {
-		fmt.Println("    Status: exists")
-	} else {
-		fmt.Println("    Status: does not exist")
+		frontLinks, err := List(true)
+		if err == nil {
+			frontCount = len(frontLinks)
+		}
 	}
+	fmt.Printf("  Front subfolder: %s (%d symlinks)\n", frontPath, frontCount)
 
-	// Back subfolder status.
-	fmt.Printf("  Back subfolder:  %s\n", backPath)
+	// Count symlinks in back folder.
+	backCount := 0
 	if Exists(backPath) {
-		fmt.Println("    Status: exists")
-	} else {
-		fmt.Println("    Status: does not exist")
+		backLinks, err := List(false)
+		if err == nil {
+			backCount = len(backLinks)
+		}
 	}
+	fmt.Printf("  Back subfolder:  %s (%d symlinks)\n", backPath, backCount)
 
-	// Check if they exist before checking clashes.
-	if !Exists(frontPath) && !Exists(backPath) {
-		fmt.Println()
-		fmt.Println("Run 'pathman init' to create the managed folder.")
-		return nil
-	}
+	// Check for conflicts.
+	fmt.Println()
 
-	// Check for name clashes.
+	// Check for name clashes between front and back.
 	clashes, err := CheckNameClashes()
 	if err != nil {
 		return fmt.Errorf("failed to check name clashes: %w", err)
 	}
 
-	if len(clashes) > 0 {
-		fmt.Println()
-		fmt.Println("Name clashes detected:")
-		for _, clash := range clashes {
-			fmt.Printf("  %s\n", clash)
+	// Check for PATH clashes.
+	pathClashes, err := CheckPathClashes()
+	if err != nil {
+		return fmt.Errorf("failed to check PATH clashes: %w", err)
+	}
+
+	// Report conflicts.
+	if len(clashes) == 0 && len(pathClashes) == 0 {
+		fmt.Println("No PATH clashes detected.")
+	} else {
+		if len(clashes) > 0 {
+			fmt.Println("Name clashes detected (same name in both front and back):")
+			for _, clash := range clashes {
+				fmt.Printf("  %s\n", clash)
+			}
+			if len(pathClashes) > 0 {
+				fmt.Println()
+			}
+		}
+
+		if len(pathClashes) > 0 {
+			fmt.Println("PATH clashes detected (masking or masked by other executables):")
+			for _, clash := range pathClashes {
+				fmt.Printf("  %s\n", clash)
+			}
 		}
 	}
 
@@ -197,6 +220,73 @@ func CheckNameClashes() ([]string, error) {
 	for _, name := range backLinks {
 		if frontSet[name] {
 			clashes = append(clashes, name)
+		}
+	}
+
+	return clashes, nil
+}
+
+// CheckPathClashes checks if any managed symlinks mask or are masked by executables elsewhere on PATH.
+func CheckPathClashes() ([]string, error) {
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return nil, nil
+	}
+
+	pathDirs := filepath.SplitList(pathEnv)
+	frontFolder, _ := GetFrontFolder()
+	backFolder, _ := GetBackFolder()
+
+	// Get all managed symlinks with their priorities.
+	allSymlinks, err := ListLongBoth()
+	if err != nil {
+		return nil, err
+	}
+
+	var clashes []string
+
+	for _, symlink := range allSymlinks {
+		// Find where this symlink is in PATH.
+		var symlinkPosition int = -1
+		var symlinkFolder string
+		
+		if symlink.Priority == "front" {
+			symlinkFolder = frontFolder
+		} else {
+			symlinkFolder = backFolder
+		}
+
+		for i, dir := range pathDirs {
+			if dir == symlinkFolder {
+				symlinkPosition = i
+				break
+			}
+		}
+
+		if symlinkPosition == -1 {
+			// Managed folder not in PATH, skip checking.
+			continue
+		}
+
+		// Check all PATH directories for the same executable name.
+		for i, dir := range pathDirs {
+			// Skip the managed folders themselves.
+			if dir == frontFolder || dir == backFolder {
+				continue
+			}
+
+			execPath := filepath.Join(dir, symlink.Name)
+			if _, err := os.Stat(execPath); err == nil {
+				// Found executable with same name.
+				if i < symlinkPosition {
+					// Executable comes before our symlink - our symlink is masked.
+					clashes = append(clashes, fmt.Sprintf("%s (masked by %s)", symlink.Name, execPath))
+				} else {
+					// Our symlink comes before executable - we mask it.
+					clashes = append(clashes, fmt.Sprintf("%s (masks %s)", symlink.Name, execPath))
+				}
+				break // Only report first clash per symlink.
+			}
 		}
 	}
 
@@ -512,10 +602,58 @@ func List(atFront bool) ([]string, error) {
 	return symlinks, nil
 }
 
+// ListBoth returns all symlink names from both front and back folders.
+func ListBoth() ([]string, error) {
+	frontPath, backPath, err := GetBothSubfolders()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subfolder paths: %w", err)
+	}
+
+	seenNames := make(map[string]bool)
+	var allSymlinks []string
+
+	// List front folder first.
+	if Exists(frontPath) {
+		entries, err := os.ReadDir(frontPath)
+		if err == nil {
+			for _, entry := range entries {
+				entryPath := filepath.Join(frontPath, entry.Name())
+				info, err := os.Lstat(entryPath)
+				if err == nil && info.Mode()&os.ModeSymlink != 0 {
+					if !seenNames[entry.Name()] {
+						allSymlinks = append(allSymlinks, entry.Name())
+						seenNames[entry.Name()] = true
+					}
+				}
+			}
+		}
+	}
+
+	// List back folder.
+	if Exists(backPath) {
+		entries, err := os.ReadDir(backPath)
+		if err == nil {
+			for _, entry := range entries {
+				entryPath := filepath.Join(backPath, entry.Name())
+				info, err := os.Lstat(entryPath)
+				if err == nil && info.Mode()&os.ModeSymlink != 0 {
+					if !seenNames[entry.Name()] {
+						allSymlinks = append(allSymlinks, entry.Name())
+						seenNames[entry.Name()] = true
+					}
+				}
+			}
+		}
+	}
+
+	return allSymlinks, nil
+}
+
 // SymlinkInfo represents information about a symlink.
 type SymlinkInfo struct {
-	Name   string
-	Target string
+	Name     string
+	Target   string
+	Priority string // "front" or "back"
 }
 
 // ListLong returns detailed information about all symlinks in the managed subfolder.
@@ -555,14 +693,75 @@ func ListLong(atFront bool) ([]SymlinkInfo, error) {
 			if err != nil {
 				target = "<error reading link>"
 			}
+			priority := "back"
+			if atFront {
+				priority = "front"
+			}
 			symlinks = append(symlinks, SymlinkInfo{
-				Name:   entry.Name(),
-				Target: target,
+				Name:     entry.Name(),
+				Target:   target,
+				Priority: priority,
 			})
 		}
 	}
 
 	return symlinks, nil
+}
+
+// ListLongBoth returns detailed information about all symlinks from both front and back folders.
+func ListLongBoth() ([]SymlinkInfo, error) {
+	frontPath, backPath, err := GetBothSubfolders()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subfolder paths: %w", err)
+	}
+
+	var allSymlinks []SymlinkInfo
+
+	// List front folder first.
+	if Exists(frontPath) {
+		entries, err := os.ReadDir(frontPath)
+		if err == nil {
+			for _, entry := range entries {
+				entryPath := filepath.Join(frontPath, entry.Name())
+				info, err := os.Lstat(entryPath)
+				if err == nil && info.Mode()&os.ModeSymlink != 0 {
+					target, err := os.Readlink(entryPath)
+					if err != nil {
+						target = "<error reading link>"
+					}
+					allSymlinks = append(allSymlinks, SymlinkInfo{
+						Name:     entry.Name(),
+						Target:   target,
+						Priority: "front",
+					})
+				}
+			}
+		}
+	}
+
+	// List back folder.
+	if Exists(backPath) {
+		entries, err := os.ReadDir(backPath)
+		if err == nil {
+			for _, entry := range entries {
+				entryPath := filepath.Join(backPath, entry.Name())
+				info, err := os.Lstat(entryPath)
+				if err == nil && info.Mode()&os.ModeSymlink != 0 {
+					target, err := os.Readlink(entryPath)
+					if err != nil {
+						target = "<error reading link>"
+					}
+					allSymlinks = append(allSymlinks, SymlinkInfo{
+						Name:     entry.Name(),
+						Target:   target,
+						Priority: "back",
+					})
+				}
+			}
+		}
+	}
+
+	return allSymlinks, nil
 }
 
 // Add creates a symlink to the executable in the managed subfolder.

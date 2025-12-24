@@ -25,7 +25,6 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewAddCmd())
 	cmd.AddCommand(NewRemoveCmd())
 	cmd.AddCommand(NewListCmd())
-	cmd.AddCommand(NewFolderCmd())
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewPathCmd())
 	cmd.AddCommand(NewRenameCmd())
@@ -137,46 +136,6 @@ Use --front to list from the front folder or --back to list from the back folder
 }
 
 // NewFolderCmd creates the folder command.
-func NewFolderCmd() *cobra.Command {
-	var setPath string
-	var front bool
-	var back bool
-
-	cmd := &cobra.Command{
-		Use:   "folder",
-		Short: "Display or configure the managed folders",
-		Long: `Display the paths of both managed folders, or set a new path for one of them.
-With --set, you must also specify either --front or --back.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if setPath != "" {
-				// Setting base folder path.
-				if err := folder.SetManagedFolder(setPath); err != nil {
-					return err
-				}
-
-				fmt.Printf("Set managed folder to: %s\n", setPath)
-				return nil
-			}
-
-			// Default: list both subfolder paths, one per line.
-			frontPath, backPath, err := folder.GetBothSubfolders()
-			if err != nil {
-				return err
-			}
-			fmt.Println(frontPath)
-			fmt.Println(backPath)
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&setPath, "set", "", "Set the managed folder path")
-	cmd.Flags().BoolVar(&front, "front", false, "Operate on front folder")
-	cmd.Flags().BoolVar(&back, "back", false, "Operate on back folder")
-
-	return cmd
-}
-
 // NewInitCmd creates the init command.
 func NewInitCmd() *cobra.Command {
 	cmd := &cobra.Command{

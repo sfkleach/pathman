@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement the _structure_ of the pathman console-application in Golang. Use
+Implement the first draft the pathman console-application in Golang. Use
 a full workspace structure with `cmd` and `pkg` folders.
 
 ## Part A
@@ -25,11 +25,19 @@ the user has write permission. Report the action back to the console.
 
 `pathname init` should:
 
-- Check the $PATH variable to determine if the front-and-back subfolders are on the $PATH.
-- If it is not, print out a message explaining that the pathman folders should be added to your $PATH.
-- If the SHELL is `bash` explain that this is normally put in your `.profile` or `.bash_profile` and offer to add a suitable command at the end of the relevant file.
-- If the user accepts this, then detect which of `.profile` or `.bash_profile` need to be editing, make the relevant change, and inform the user of what was done.
-    - Ensure that the modification to the profile file (.profile or .bash_profile) uses `pathname path` rather than hard-codes the managed folder name.
+- Check the $PATH variable to determine if the front-and-back subfolders are on
+  the $PATH.
+- If it is not, print out a message explaining that the pathman folders should
+  be added to your $PATH.
+- If the SHELL is `bash` explain that this is normally put in your `.profile` or
+  `.bash_profile` and offer to add a suitable command at the end of the relevant
+  file.
+- If the user accepts this, then detect which of `.profile` or `.bash_profile`
+  need to be editing, make the relevant change, and inform the user of what was
+  done.
+    - Ensure that the modification to the profile file (.profile or
+      .bash_profile) uses `pathname path` rather than hard-codes the managed
+      folder name.
 
 
 ## Part C
@@ -54,7 +62,8 @@ is effectively CRUD for our managed folder.
 
 - `pathname list|ls` will list all the commands in a simple list but the `--long` or `-l` will
   add the priority (front/back) and the file it is linked to. The commands are
-  listed in alphabetical order.
+  listed in alphabetical order. By adding `--front` or `--back` options the
+  list is restricted by priority - both options are not allowed.
 
 
 ## Part D
@@ -62,18 +71,17 @@ is effectively CRUD for our managed folder.
 Implement the `pathman path` subcommand. This is to support this use-case:
 `export PATH=$(pathman path)` into our `.bash_profile` (o.n.o.)
 
-- `pathman path`: Checks $PATH to see if the managed subfolders are already on there,
-  removing them if they are, then adds the front subfolder to the front of $PATH
-  and the back subfolder to the end of $PATH. And finally prints the adjusted $PATH.
+- `pathman path`: Checks $PATH to see if the managed subfolders are already on
+  there, removing them if they are, then adds the front subfolder to the front
+  of $PATH and the back subfolder to the end of $PATH. And finally prints the
+  adjusted $PATH.
 
 ## Part E
 
 Implement the `pathman rename|mv OLD NEW` command and the `pathman priority NAME`
 and `pathman priority NAME=VALUE` commands.
 
-## Part X
+## Part F
 
 All normal interactive commands should run the permissions safety check. 
-
-
 

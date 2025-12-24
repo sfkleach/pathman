@@ -11,18 +11,7 @@ import (
 )
 
 // GetManagedFolder returns the path to the managed folder.
-// It first checks the configuration file, then falls back to the default.
-// atFront determines which folder to return (true for front, false for back).
 func GetManagedFolder() (string, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return "", err
-	}
-
-	if cfg != nil && cfg.ManagedFolder != "" {
-		return cfg.ManagedFolder, nil
-	}
-
 	return config.GetDefaultManagedFolder()
 }
 
@@ -72,20 +61,6 @@ func Create(folderPath string) error {
 }
 
 // SetManagedFolder sets the managed folder path in the configuration.
-func SetManagedFolder(folderPath string) error {
-	// Load existing config or create new one.
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-
-	cfg.ManagedFolder = folderPath
-	return cfg.Save()
-}
-
 // PrintSummary prints a summary of both managed folders and checks for name clashes.
 func PrintSummary() error {
 	frontPath, backPath, err := GetBothSubfolders()

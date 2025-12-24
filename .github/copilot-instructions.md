@@ -24,6 +24,10 @@ The goal is to build robust, well-designed software, not to avoid technical disa
   compiled binary. (Unless we are deliberately testing an out-of-date binary).
 - Do not create artefacts within the repository folder structure
   - EXCEPT in folders starting with an underscore, such as  `_build/`.
+- Design decisions should be documents in the `docs/decisions/` folder using
+  the established template. However you do not need to precisely follow the template.
+  In some cases there were not multiple options considered so the pros-and-cons section may be omitted
+  and we simply document the reasoning behind the decision.
 
 ## Programming Guidelines
 

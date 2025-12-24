@@ -5,8 +5,6 @@ accessible by $PATH. With `pathman`, you can add individual executables to the
 front or back of your $PATH, remove them, list them and detect path clashes.
 
 
-
-
 ## Commands
 
 - `pathman init`: Creates the managed folder and both subfolders if they don't exist. Checks if the subfolders are on your $PATH and offers to add them to your shell configuration (for bash users).
@@ -31,9 +29,11 @@ front or back of your $PATH, remove them, list them and detect path clashes.
 
 ## Implementation
 
-Pathman manages a base folder `~/.local/bin/pathman-links` with two subfolders:
+Pathman manages a base folder `~/.local/bin/pathman-links` with two subfolders of symlinks:
 - **Front subfolder**: `~/.local/bin/pathman-links/front` - Added to the front of $PATH (highest precedence)
 - **Back subfolder**: `~/.local/bin/pathman-links/back` - Added to the back of $PATH (lowest precedence)
+
+It works by adding and removing symlinks from these two folders. 
 
 
 ## Get Started

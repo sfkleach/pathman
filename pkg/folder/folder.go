@@ -60,6 +60,52 @@ func Create(folderPath string) error {
 	return os.MkdirAll(folderPath, 0755)
 }
 
+// checkPathMasking checks if adding a symlink will mask or be masked by other executables on PATH.
+func checkPathMasking(symlinkName, targetFolder string, atFront bool) error {
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return nil
+	}
+
+	pathDirs := filepath.SplitList(pathEnv)
+	frontFolder, _ := GetFrontFolder()
+	backFolder, _ := GetBackFolder()
+
+	// Find where in PATH this symlink will be placed.
+	var symlinkPosition int = -1
+	for i, dir := range pathDirs {
+		if (atFront && dir == frontFolder) || (!atFront && dir == backFolder) {
+			symlinkPosition = i
+			break
+		}
+	}
+
+	// Check all PATH directories for the same executable name.
+	for i, dir := range pathDirs {
+		// Skip the managed folders themselves.
+		if dir == frontFolder || dir == backFolder {
+			continue
+		}
+
+		execPath := filepath.Join(dir, symlinkName)
+		if _, err := os.Stat(execPath); err == nil {
+			// Found executable with same name.
+			if symlinkPosition == -1 {
+				// Managed folder not in PATH, can't determine masking.
+				fmt.Printf("Warning: executable '%s' exists at %s\n", symlinkName, execPath)
+			} else if i < symlinkPosition {
+				// Executable comes before our symlink - our symlink will be masked.
+				return fmt.Errorf("symlink '%s' will be masked by existing executable at %s (use --force to add anyway)", symlinkName, execPath)
+			} else {
+				// Our symlink comes before executable - we will mask it.
+				return fmt.Errorf("symlink '%s' will mask existing executable at %s (use --force to add anyway)", symlinkName, execPath)
+			}
+		}
+	}
+
+	return nil
+}
+
 // SetManagedFolder sets the managed folder path in the configuration.
 // PrintSummary prints a summary of both managed folders and checks for name clashes.
 func PrintSummary() error {
@@ -521,7 +567,7 @@ func ListLong(atFront bool) ([]SymlinkInfo, error) {
 
 // Add creates a symlink to the executable in the managed subfolder.
 // If a symlink with the same name exists in the other subfolder, it's moved to the specified subfolder.
-func Add(executablePath, name string, atFront bool) error {
+func Add(executablePath, name string, atFront bool, force bool) error {
 	var folderPath, otherFolderPath string
 	var err error
 
@@ -570,7 +616,20 @@ func Add(executablePath, name string, atFront bool) error {
 
 	// Check if symlink already exists in the target subfolder.
 	if _, err := os.Lstat(symlinkPath); err == nil {
-		return fmt.Errorf("symlink already exists: %s", symlinkName)
+		if !force {
+			return fmt.Errorf("symlink already exists: %s (use --force to overwrite)", symlinkName)
+		}
+		// Remove existing symlink when force is used.
+		if err := os.Remove(symlinkPath); err != nil {
+			return fmt.Errorf("failed to remove existing symlink: %w", err)
+		}
+	}
+
+	// Check for PATH masking issues (only if not forcing).
+	if !force {
+		if err := checkPathMasking(symlinkName, folderPath, atFront); err != nil {
+			return err
+		}
 	}
 
 	// Check if symlink exists in the other subfolder and remove it if so.

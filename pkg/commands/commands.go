@@ -38,6 +38,7 @@ func NewAddCmd() *cobra.Command {
 	var name string
 	var front bool
 	var back bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "add <executable>",
@@ -56,13 +57,14 @@ Use --front to add to the front folder or --back to add to the back folder (defa
 			atFront := front
 
 			executable := args[0]
-			return folder.Add(executable, name, atFront)
+			return folder.Add(executable, name, atFront, force)
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Custom name for the symlink")
 	cmd.Flags().BoolVar(&front, "front", false, "Add to front folder")
 	cmd.Flags().BoolVar(&back, "back", false, "Add to back folder (default)")
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing symlink and ignore masking warnings")
 
 	return cmd
 }

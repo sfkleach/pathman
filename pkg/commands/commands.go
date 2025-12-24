@@ -173,23 +173,6 @@ Without --priority, lists from both folders and all managed directories.`,
 	return cmd
 }
 
-// NewFolderCmd creates the folder command.
-// NewInitCmd creates the init command.
-func NewInitCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Create the managed folder",
-		Long: `Create the managed folder with appropriate permissions.
-If the folder already exists, check its permissions and warn if insecure.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return folder.Init()
-		},
-	}
-
-	return cmd
-}
-
 // NewPathCmd creates the path command.
 func NewPathCmd() *cobra.Command {
 	cmd := &cobra.Command{

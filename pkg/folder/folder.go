@@ -12,17 +12,39 @@ import (
 
 // GetManagedFolder returns the path to the managed folder.
 // It first checks the configuration file, then falls back to the default.
-func GetManagedFolder() (string, error) {
+// atFront determines which folder to return (true for front, false for back).
+func GetManagedFolder(atFront bool) (string, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return "", err
 	}
 
-	if cfg != nil && cfg.ManagedFolder != "" {
-		return cfg.ManagedFolder, nil
+	if cfg != nil {
+		if atFront && cfg.ManagedFolderFront != "" {
+			return cfg.ManagedFolderFront, nil
+		}
+		if !atFront && cfg.ManagedFolderBack != "" {
+			return cfg.ManagedFolderBack, nil
+		}
 	}
 
-	return config.GetDefaultManagedFolder()
+	if atFront {
+		return config.GetDefaultManagedFolderFront()
+	}
+	return config.GetDefaultManagedFolderBack()
+}
+
+// GetBothManagedFolders returns both front and back folder paths.
+func GetBothManagedFolders() (front string, back string, err error) {
+	front, err = GetManagedFolder(true)
+	if err != nil {
+		return "", "", err
+	}
+	back, err = GetManagedFolder(false)
+	if err != nil {
+		return "", "", err
+	}
+	return front, back, nil
 }
 
 // Exists checks if the managed folder exists.
@@ -40,79 +62,147 @@ func Create(folderPath string) error {
 }
 
 // SetManagedFolder sets the managed folder path in the configuration.
-func SetManagedFolder(folderPath string) error {
-	cfg := &config.Config{
-		ManagedFolder: folderPath,
+// atFront determines which folder to set (true for front, false for back).
+func SetManagedFolder(folderPath string, atFront bool) error {
+	// Load existing config or create new one.
+	cfg, err := config.Load()
+	if err != nil {
+		return err
 	}
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+
+	// Set the appropriate folder.
+	if atFront {
+		cfg.ManagedFolderFront = folderPath
+	} else {
+		cfg.ManagedFolderBack = folderPath
+	}
+
 	return cfg.Save()
 }
 
-// PrintStatus prints the status of the managed folder.
-func PrintStatus() error {
-	folderPath, err := GetManagedFolder()
+// PrintSummary prints a summary of both managed folders and checks for name clashes.
+func PrintSummary() error {
+	frontPath, backPath, err := GetBothManagedFolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder path: %w", err)
+		return fmt.Errorf("failed to get managed folder paths: %w", err)
 	}
 
-	if Exists(folderPath) {
-		fmt.Println(folderPath)
+	fmt.Println("Pathman Managed Folders:")
+	fmt.Println()
+
+	// Front folder status.
+	fmt.Printf("  Front folder: %s\n", frontPath)
+	if Exists(frontPath) {
+		fmt.Println("    Status: exists")
+	} else {
+		fmt.Println("    Status: does not exist")
+	}
+
+	// Back folder status.
+	fmt.Printf("  Back folder:  %s\n", backPath)
+	if Exists(backPath) {
+		fmt.Println("    Status: exists")
+	} else {
+		fmt.Println("    Status: does not exist")
+	}
+
+	// Check if they exist before checking clashes.
+	if !Exists(frontPath) && !Exists(backPath) {
+		fmt.Println()
+		fmt.Println("Run 'pathman init' to create the managed folders.")
 		return nil
 	}
 
-	fmt.Printf("Managed folder does not exist: %s\n", folderPath)
-	fmt.Println("You can create it with: pathman init")
+	// Check for name clashes.
+	clashes, err := CheckNameClashes()
+	if err != nil {
+		return fmt.Errorf("failed to check name clashes: %w", err)
+	}
+
+	if len(clashes) > 0 {
+		fmt.Println()
+		fmt.Println("Name clashes detected:")
+		for _, clash := range clashes {
+			fmt.Printf("  %s\n", clash)
+		}
+	}
+
 	return nil
 }
 
-// Init initializes the managed folder.
-// If the folder doesn't exist, it creates it with appropriate permissions (chmod a+r,u+w).
-// If the folder exists, it checks permissions and warns if anyone except the user has write permission.
-// It also checks if the folder is on $PATH and offers to add it for bash users.
-func Init() error {
-	folderPath, err := GetManagedFolder()
+// CheckNameClashes checks for executables with the same name in both folders.
+func CheckNameClashes() ([]string, error) {
+	frontPath, backPath, err := GetBothManagedFolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder path: %w", err)
+		return nil, err
 	}
 
-	folderCreated := false
+	var clashes []string
 
-	if Exists(folderPath) {
-		// Folder exists, check permissions.
-		info, err := os.Stat(folderPath)
-		if err != nil {
-			return fmt.Errorf("failed to stat folder: %w", err)
-		}
-
-		mode := info.Mode()
-		perm := mode.Perm()
-
-		// Check if group or others have write permission (bits 1 or 4 in octal).
-		// We want only user to have write (0200).
-		if perm&0022 != 0 {
-			fmt.Printf("Managed folder already exists: %s\n", folderPath)
-			fmt.Printf("WARNING: Folder has insecure permissions: %04o\n", perm)
-			fmt.Println("Group or others have write permission. This is a security risk.")
-			fmt.Println("Recommended permissions: 0755 (owner read/write/execute, all read/execute)")
-		} else {
-			fmt.Printf("Managed folder already exists: %s\n", folderPath)
-			fmt.Printf("Permissions are correct: %04o\n", perm)
-		}
-	} else {
-		// Create the folder with permissions: owner read+write+execute, all read+execute (0755).
-		if err := os.MkdirAll(folderPath, 0755); err != nil {
-			return fmt.Errorf("failed to create folder: %w", err)
-		}
-
-		fmt.Printf("Created managed folder: %s\n", folderPath)
-		fmt.Printf("Permissions set to: 0755 (owner read/write/execute, all read/execute)\n")
-		folderCreated = true
+	// Only check if both exist.
+	if !Exists(frontPath) || !Exists(backPath) {
+		return clashes, nil
 	}
 
-	// Check if the folder is on $PATH.
-	if !IsOnPath(folderPath) {
+	// Get lists from both folders.
+	frontLinks, err := List(true)
+	if err != nil {
+		return nil, err
+	}
+
+	backLinks, err := List(false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find common names.
+	frontSet := make(map[string]bool)
+	for _, name := range frontLinks {
+		frontSet[name] = true
+	}
+
+	for _, name := range backLinks {
+		if frontSet[name] {
+			clashes = append(clashes, name)
+		}
+	}
+
+	return clashes, nil
+}
+
+// Init initializes both managed folders.
+// If the folders don't exist, it creates them with appropriate permissions.
+// If the folders exist, it checks permissions and warns if insecure.
+// It also checks if the folders are on $PATH and offers to add them for bash users.
+func Init() error {
+	frontPath, backPath, err := GetBothManagedFolders()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder paths: %w", err)
+	}
+
+	// Initialize front folder.
+	frontCreated, err := initFolder(frontPath, "front")
+	if err != nil {
+		return err
+	}
+
+	// Initialize back folder.
+	backCreated, err := initFolder(backPath, "back")
+	if err != nil {
+		return err
+	}
+
+	// Check if folders are on $PATH.
+	frontOnPath := IsOnPath(frontPath)
+	backOnPath := IsOnPath(backPath)
+
+	if !frontOnPath || !backOnPath {
 		fmt.Println()
-		fmt.Printf("The managed folder is not on your $PATH.\n")
-		fmt.Println("To use executables in this folder, you need to add it to your $PATH.")
+		fmt.Println("The managed folders are not properly configured in your $PATH.")
+		fmt.Println("To use executables in these folders, you need to add them to your $PATH.")
 
 		// Check if the user is using bash.
 		shell := os.Getenv("SHELL")
@@ -126,26 +216,64 @@ func Init() error {
 			profileName := filepath.Base(profilePath)
 			fmt.Printf("Since you're using bash, this is normally done by adding a line to your ~/%s file.\n", profileName)
 
-			if answer, err := PromptUser("Would you like me to add it for you?"); err != nil {
+			if answer, err := PromptUser("Would you like me to add the PATH configuration for you?"); err != nil {
 				return fmt.Errorf("failed to read user input: %w", err)
 			} else if answer {
-				if err := AddToProfile(folderPath); err != nil {
+				if err := AddToProfile(); err != nil {
 					return fmt.Errorf("failed to add to profile: %w", err)
 				}
 			} else {
 				fmt.Printf("\nTo add it manually, add this line to your ~/%s:\n", profileName)
-				fmt.Printf("  export PATH=\"%s:$PATH\"\n", folderPath)
+				fmt.Printf("  export PATH=$(pathman path)\n")
 			}
 		} else {
-			fmt.Printf("\nTo add it to your PATH, add this line to your shell configuration:\n")
-			fmt.Printf("  export PATH=\"%s:$PATH\"\n", folderPath)
+			fmt.Println("\nTo add it to your PATH, add this line to your shell configuration:")
+			fmt.Println("  export PATH=$(pathman path)")
 		}
-	} else if folderCreated {
+	} else if frontCreated || backCreated {
 		fmt.Println()
-		fmt.Println("The managed folder is already on your $PATH.")
+		fmt.Println("The managed folders are already properly configured in your $PATH.")
 	}
 
 	return nil
+}
+
+// initFolder initializes a single folder (helper for Init).
+func initFolder(folderPath, label string) (bool, error) {
+	folderCreated := false
+
+	if Exists(folderPath) {
+		// Folder exists, check permissions.
+		info, err := os.Stat(folderPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to stat folder: %w", err)
+		}
+
+		mode := info.Mode()
+		perm := mode.Perm()
+
+		// Check if group or others have write permission.
+		if perm&0022 != 0 {
+			fmt.Printf("Managed folder (%s) already exists: %s\n", label, folderPath)
+			fmt.Printf("WARNING: Folder has insecure permissions: %04o\n", perm)
+			fmt.Println("Group or others have write permission. This is a security risk.")
+			fmt.Println("Recommended permissions: 0755 (owner read/write/execute, all read/execute)")
+		} else {
+			fmt.Printf("Managed folder (%s) already exists: %s\n", label, folderPath)
+			fmt.Printf("Permissions are correct: %04o\n", perm)
+		}
+	} else {
+		// Create the folder with permissions: owner read+write+execute, all read+execute (0755).
+		if err := os.MkdirAll(folderPath, 0755); err != nil {
+			return false, fmt.Errorf("failed to create folder: %w", err)
+		}
+
+		fmt.Printf("Created managed folder (%s): %s\n", label, folderPath)
+		fmt.Printf("Permissions set to: 0755 (owner read/write/execute, all read/execute)\n")
+		folderCreated = true
+	}
+
+	return folderCreated, nil
 }
 
 // IsOnPath checks if the given folder path is on the $PATH.
@@ -171,32 +299,38 @@ func IsOnPath(folderPath string) bool {
 
 // GetAdjustedPath returns the PATH with the managed folder added if not already present.
 // If atFront is true, adds to the front; otherwise adds to the back.
-func GetAdjustedPath(atFront bool) (string, error) {
-	folderPath, err := GetManagedFolder()
+func GetAdjustedPath() (string, error) {
+	frontPath, backPath, err := GetBothManagedFolders()
 	if err != nil {
-		return "", fmt.Errorf("failed to get managed folder path: %w", err)
+		return "", fmt.Errorf("failed to get managed folder paths: %w", err)
 	}
 
 	pathEnv := os.Getenv("PATH")
-
-	// Check if already on PATH.
-	if IsOnPath(folderPath) {
-		return pathEnv, nil
-	}
-
-	// Add to front or back.
-	if atFront {
-		if pathEnv == "" {
-			return folderPath, nil
-		}
-		return folderPath + string(os.PathListSeparator) + pathEnv, nil
-	}
-
-	// Add to back (default).
 	if pathEnv == "" {
-		return folderPath, nil
+		// Empty PATH: just add both folders.
+		return frontPath + string(os.PathListSeparator) + backPath, nil
 	}
-	return pathEnv + string(os.PathListSeparator) + folderPath, nil
+
+	// Remove any existing occurrences of both folders from PATH.
+	pathParts := strings.Split(pathEnv, string(os.PathListSeparator))
+	var cleanedParts []string
+	for _, part := range pathParts {
+		if part != frontPath && part != backPath {
+			cleanedParts = append(cleanedParts, part)
+		}
+	}
+
+	// Build new PATH: front folder + cleaned parts + back folder.
+	var newPath string
+	if len(cleanedParts) == 0 {
+		newPath = frontPath + string(os.PathListSeparator) + backPath
+	} else {
+		newPath = frontPath + string(os.PathListSeparator) +
+			strings.Join(cleanedParts, string(os.PathListSeparator)) +
+			string(os.PathListSeparator) + backPath
+	}
+
+	return newPath, nil
 }
 
 // GetBashProfilePath determines which bash profile file to use.
@@ -216,14 +350,14 @@ func GetBashProfilePath() (string, error) {
 }
 
 // AddToProfile adds the managed folder to the user's bash profile.
-func AddToProfile(folderPath string) error {
+func AddToProfile() error {
 	profilePath, err := GetBashProfilePath()
 	if err != nil {
 		return fmt.Errorf("failed to get profile path: %w", err)
 	}
 
 	// Check if the export line already exists.
-	if hasPathExport, err := profileHasPathExport(profilePath, folderPath); err != nil {
+	if hasPathExport, err := profileHasPathmanExport(profilePath); err != nil {
 		return err
 	} else if hasPathExport {
 		fmt.Printf("PATH export already exists in %s\n", profilePath)
@@ -256,8 +390,8 @@ func AddToProfile(folderPath string) error {
 		}
 	}
 
-	// Add the export line.
-	exportLine := fmt.Sprintf("\n# Added by pathman\nexport PATH=\"%s:$PATH\"\n", folderPath)
+	// Add the export line using pathman path.
+	exportLine := "\n# Added by pathman\nexport PATH=$(pathman path)\n"
 	if _, err := f.WriteString(exportLine); err != nil {
 		return fmt.Errorf("failed to write to profile: %w", err)
 	}
@@ -267,8 +401,8 @@ func AddToProfile(folderPath string) error {
 	return nil
 }
 
-// profileHasPathExport checks if the profile already has an export for the folder path.
-func profileHasPathExport(profilePath, folderPath string) (bool, error) {
+// profileHasPathmanExport checks if the profile already has a pathman export.
+func profileHasPathmanExport(profilePath string) (bool, error) {
 	f, err := os.Open(profilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -281,8 +415,8 @@ func profileHasPathExport(profilePath, folderPath string) (bool, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		// Check if the line exports PATH and contains our folder.
-		if strings.Contains(line, "export") && strings.Contains(line, "PATH") && strings.Contains(line, folderPath) {
+		// Check if the line exports PATH and uses pathman path.
+		if strings.Contains(line, "export") && strings.Contains(line, "PATH") && strings.Contains(line, "pathman path") {
 			return true, nil
 		}
 	}
@@ -307,8 +441,8 @@ func PromptUser(question string) (bool, error) {
 }
 
 // List returns a list of all symlinks in the managed folder.
-func List() ([]string, error) {
-	folderPath, err := GetManagedFolder()
+func List(atFront bool) ([]string, error) {
+	folderPath, err := GetManagedFolder(atFront)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
 	}
@@ -345,8 +479,8 @@ type SymlinkInfo struct {
 }
 
 // ListLong returns detailed information about all symlinks in the managed folder.
-func ListLong() ([]SymlinkInfo, error) {
-	folderPath, err := GetManagedFolder()
+func ListLong(atFront bool) ([]SymlinkInfo, error) {
+	folderPath, err := GetManagedFolder(atFront)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get managed folder path: %w", err)
 	}
@@ -384,8 +518,9 @@ func ListLong() ([]SymlinkInfo, error) {
 }
 
 // Add creates a symlink to the executable in the managed folder.
-func Add(executablePath, name string) error {
-	folderPath, err := GetManagedFolder()
+// If a symlink with the same name exists in the other folder, it's moved to the specified folder.
+func Add(executablePath, name string, atFront bool) error {
+	folderPath, err := GetManagedFolder(atFront)
 	if err != nil {
 		return fmt.Errorf("failed to get managed folder path: %w", err)
 	}
@@ -419,9 +554,24 @@ func Add(executablePath, name string) error {
 
 	symlinkPath := filepath.Join(folderPath, symlinkName)
 
-	// Check if symlink already exists.
+	// Check if symlink already exists in the target folder.
 	if _, err := os.Lstat(symlinkPath); err == nil {
 		return fmt.Errorf("symlink already exists: %s", symlinkName)
+	}
+
+	// Check if symlink exists in the other folder and remove it if so.
+	otherFolderPath, err := GetManagedFolder(!atFront)
+	if err == nil && Exists(otherFolderPath) {
+		otherSymlinkPath := filepath.Join(otherFolderPath, symlinkName)
+		if _, err := os.Lstat(otherSymlinkPath); err == nil {
+			// Symlink exists in other folder, remove it.
+			if err := os.Remove(otherSymlinkPath); err != nil {
+				return fmt.Errorf("failed to remove symlink from other folder: %w", err)
+			}
+			fromLabel := map[bool]string{true: "front", false: "back"}[!atFront]
+			toLabel := map[bool]string{true: "front", false: "back"}[atFront]
+			fmt.Printf("Moved '%s' from %s to %s\n", symlinkName, fromLabel, toLabel)
+		}
 	}
 
 	// Create the symlink.
@@ -429,42 +579,109 @@ func Add(executablePath, name string) error {
 		return fmt.Errorf("failed to create symlink: %w", err)
 	}
 
-	fmt.Printf("Added '%s' -> '%s'\n", symlinkName, absExecutablePath)
+	folderLabel := map[bool]string{true: "front", false: "back"}[atFront]
+	fmt.Printf("Added '%s' -> '%s' (%s)\n", symlinkName, absExecutablePath, folderLabel)
 	return nil
 }
 
-// Remove removes a symlink from the managed folder.
+// Remove removes a symlink from the managed folders (searches both front and back).
 func Remove(name string) error {
-	folderPath, err := GetManagedFolder()
+	frontPath, backPath, err := GetBothManagedFolders()
 	if err != nil {
-		return fmt.Errorf("failed to get managed folder path: %w", err)
+		return fmt.Errorf("failed to get managed folder paths: %w", err)
 	}
 
-	if !Exists(folderPath) {
-		return fmt.Errorf("managed folder does not exist: %s", folderPath)
-	}
-
-	symlinkPath := filepath.Join(folderPath, name)
-
-	// Check if the symlink exists.
-	info, err := os.Lstat(symlinkPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("symlink does not exist: %s", name)
+	// Try front folder first.
+	if Exists(frontPath) {
+		symlinkPath := filepath.Join(frontPath, name)
+		if info, err := os.Lstat(symlinkPath); err == nil {
+			// Make sure it's a symlink.
+			if info.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("'%s' is not a symlink", name)
+			}
+			// Remove the symlink.
+			if err := os.Remove(symlinkPath); err != nil {
+				return fmt.Errorf("failed to remove symlink: %w", err)
+			}
+			fmt.Printf("Removed '%s' (from front)\n", name)
+			return nil
 		}
-		return fmt.Errorf("failed to stat symlink: %w", err)
 	}
 
-	// Make sure it's a symlink.
-	if info.Mode()&os.ModeSymlink == 0 {
-		return fmt.Errorf("'%s' is not a symlink", name)
+	// Try back folder.
+	if Exists(backPath) {
+		symlinkPath := filepath.Join(backPath, name)
+		if info, err := os.Lstat(symlinkPath); err == nil {
+			// Make sure it's a symlink.
+			if info.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("'%s' is not a symlink", name)
+			}
+			// Remove the symlink.
+			if err := os.Remove(symlinkPath); err != nil {
+				return fmt.Errorf("failed to remove symlink: %w", err)
+			}
+			fmt.Printf("Removed '%s' (from back)\n", name)
+			return nil
+		}
 	}
 
-	// Remove the symlink.
-	if err := os.Remove(symlinkPath); err != nil {
-		return fmt.Errorf("failed to remove symlink: %w", err)
+	return fmt.Errorf("symlink does not exist: %s", name)
+}
+
+// Rename renames a symlink in the managed folders (searches both front and back).
+func Rename(oldName, newName string) error {
+	frontPath, backPath, err := GetBothManagedFolders()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder paths: %w", err)
 	}
 
-	fmt.Printf("Removed '%s'\n", name)
-	return nil
+	// Try front folder first.
+	if Exists(frontPath) {
+		oldSymlinkPath := filepath.Join(frontPath, oldName)
+		if info, err := os.Lstat(oldSymlinkPath); err == nil {
+			// Make sure it's a symlink.
+			if info.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("'%s' is not a symlink", oldName)
+			}
+
+			// Check if new name already exists.
+			newSymlinkPath := filepath.Join(frontPath, newName)
+			if _, err := os.Lstat(newSymlinkPath); err == nil {
+				return fmt.Errorf("symlink already exists: %s", newName)
+			}
+
+			// Rename the symlink.
+			if err := os.Rename(oldSymlinkPath, newSymlinkPath); err != nil {
+				return fmt.Errorf("failed to rename symlink: %w", err)
+			}
+			fmt.Printf("Renamed '%s' to '%s' (in front)\n", oldName, newName)
+			return nil
+		}
+	}
+
+	// Try back folder.
+	if Exists(backPath) {
+		oldSymlinkPath := filepath.Join(backPath, oldName)
+		if info, err := os.Lstat(oldSymlinkPath); err == nil {
+			// Make sure it's a symlink.
+			if info.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("'%s' is not a symlink", oldName)
+			}
+
+			// Check if new name already exists.
+			newSymlinkPath := filepath.Join(backPath, newName)
+			if _, err := os.Lstat(newSymlinkPath); err == nil {
+				return fmt.Errorf("symlink already exists: %s", newName)
+			}
+
+			// Rename the symlink.
+			if err := os.Rename(oldSymlinkPath, newSymlinkPath); err != nil {
+				return fmt.Errorf("failed to rename symlink: %w", err)
+			}
+			fmt.Printf("Renamed '%s' to '%s' (in back)\n", oldName, newName)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("symlink does not exist: %s", oldName)
 }

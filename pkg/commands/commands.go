@@ -14,10 +14,10 @@ func NewRootCmd() *cobra.Command {
 		Short: "Pathman manages executables on your $PATH",
 		Long: `Pathman is a command-line tool that helps you manage the list of applications
 accessible by $PATH. With pathman, you can add, remove, and list executables
-in a single local folder.`,
+in two managed folders (front and back of $PATH).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default behavior: show folder status.
-			return folder.PrintStatus()
+			// Default behavior: show folder summary.
+			return folder.PrintSummary()
 		},
 	}
 
@@ -28,6 +28,7 @@ in a single local folder.`,
 	cmd.AddCommand(NewFolderCmd())
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewPathCmd())
+	cmd.AddCommand(NewRenameCmd())
 
 	return cmd
 }
@@ -35,21 +36,33 @@ in a single local folder.`,
 // NewAddCmd creates the add command.
 func NewAddCmd() *cobra.Command {
 	var name string
+	var front bool
+	var back bool
 
 	cmd := &cobra.Command{
 		Use:   "add <executable>",
 		Short: "Add an executable to the managed folder",
 		Long: `Add a symlink to an executable in the managed folder.
 The executable path can be relative or absolute. If --name is not specified,
-the basename of the executable will be used as the symlink name.`,
+the basename of the executable will be used as the symlink name.
+Use --front to add to the front folder or --back to add to the back folder (default).`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if front && back {
+				return fmt.Errorf("cannot specify both --front and --back")
+			}
+
+			// Default to back if neither specified.
+			atFront := front
+
 			executable := args[0]
-			return folder.Add(executable, name)
+			return folder.Add(executable, name, atFront)
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Custom name for the symlink")
+	cmd.Flags().BoolVar(&front, "front", false, "Add to front folder")
+	cmd.Flags().BoolVar(&back, "back", false, "Add to back folder (default)")
 
 	return cmd
 }
@@ -74,16 +87,26 @@ func NewRemoveCmd() *cobra.Command {
 // NewListCmd creates the list command.
 func NewListCmd() *cobra.Command {
 	var long bool
+	var front bool
+	var back bool
 
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List all managed executables",
-		Long:    `List all symlinks currently managed by pathman.`,
-		Args:    cobra.NoArgs,
+		Long:    `List all symlinks currently managed by pathman.
+Use --front to list from the front folder or --back to list from the back folder (default).`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if front && back {
+				return fmt.Errorf("cannot specify both --front and --back")
+			}
+
+			// Default to back if neither specified.
+			atFront := front
+
 			if long {
-				symlinks, err := folder.ListLong()
+				symlinks, err := folder.ListLong(atFront)
 				if err != nil {
 					return err
 				}
@@ -92,7 +115,7 @@ func NewListCmd() *cobra.Command {
 					fmt.Printf("%s -> %s\n", info.Name, info.Target)
 				}
 			} else {
-				symlinks, err := folder.List()
+				symlinks, err := folder.List(atFront)
 				if err != nil {
 					return err
 				}
@@ -106,6 +129,8 @@ func NewListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets")
+	cmd.Flags().BoolVar(&front, "front", false, "List from front folder")
+	cmd.Flags().BoolVar(&back, "back", false, "List from back folder (default)")
 
 	return cmd
 }
@@ -113,30 +138,43 @@ func NewListCmd() *cobra.Command {
 // NewFolderCmd creates the folder command.
 func NewFolderCmd() *cobra.Command {
 	var setPath string
-	var create bool
+	var front bool
+	var back bool
 
 	cmd := &cobra.Command{
 		Use:   "folder",
-		Short: "Display or configure the managed folder",
-		Args:  cobra.NoArgs,
+		Short: "Display or configure the managed folders",
+		Long: `Display the paths of both managed folders, or set a new path for one of them.
+With --set, you must also specify either --front or --back.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if setPath != "" {
-				fmt.Printf("TODO: Set managed folder to '%s'\n", setPath)
+				// Setting folder path requires --front or --back.
+				if !front && !back {
+					return fmt.Errorf("--set requires either --front or --back")
+				}
+				if front && back {
+					return fmt.Errorf("cannot specify both --front and --back")
+				}
+
+				atFront := front
+				if err := folder.SetManagedFolder(setPath, atFront); err != nil {
+					return err
+				}
+
+				folderLabel := map[bool]string{true: "front", false: "back"}[atFront]
+				fmt.Printf("Set %s folder to: %s\n", folderLabel, setPath)
 				return nil
 			}
 
-			if create {
-				fmt.Println("TODO: Create the managed folder")
-				return nil
-			}
-
-			// Default: show folder status.
-			return folder.PrintStatus()
+			// Default: show folder summary.
+			return folder.PrintSummary()
 		},
 	}
 
 	cmd.Flags().StringVar(&setPath, "set", "", "Set the managed folder path")
-	cmd.Flags().BoolVar(&create, "create", false, "Create the managed folder")
+	cmd.Flags().BoolVar(&front, "front", false, "Operate on front folder")
+	cmd.Flags().BoolVar(&back, "back", false, "Operate on back folder")
 
 	return cmd
 }
@@ -159,25 +197,16 @@ If the folder already exists, check its permissions and warn if insecure.`,
 
 // NewPathCmd creates the path command.
 func NewPathCmd() *cobra.Command {
-	var front bool
-	var back bool
-
 	cmd := &cobra.Command{
 		Use:   "path",
-		Short: "Output PATH with managed folder included",
-		Long: `Check if the managed folder is on $PATH and add it if not.
-By default adds to the back. Use --front to add to the front instead.
+		Short: "Output PATH with managed folders included",
+		Long: `Check if the managed folders are on $PATH and add them if not.
+Removes any existing occurrences of the folders and adds the front folder
+to the front of PATH and the back folder to the back of PATH.
 Outputs the adjusted PATH for use in shell configuration.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if front && back {
-				return fmt.Errorf("cannot specify both --front and --back")
-			}
-
-			// Default to back if neither specified.
-			atFront := front
-
-			adjustedPath, err := folder.GetAdjustedPath(atFront)
+			adjustedPath, err := folder.GetAdjustedPath()
 			if err != nil {
 				return err
 			}
@@ -187,8 +216,22 @@ Outputs the adjusted PATH for use in shell configuration.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&front, "front", false, "Add managed folder to front of PATH")
-	cmd.Flags().BoolVar(&back, "back", false, "Add managed folder to back of PATH (default)")
+	return cmd
+}
+
+// NewRenameCmd creates the rename command.
+func NewRenameCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rename <old-name> <new-name>",
+		Short: "Rename a symlink in the managed folders",
+		Long:  `Rename a symlink in whichever managed folder contains it.`,
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			oldName := args[0]
+			newName := args[1]
+			return folder.Rename(oldName, newName)
+		},
+	}
 
 	return cmd
 }

@@ -269,7 +269,9 @@ func NewSetCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&priority, "priority", "", "Priority: 'front' or 'back' (required)")
-	cmd.MarkFlagRequired("priority")
+	if err := cmd.MarkFlagRequired("priority"); err != nil {
+		panic(fmt.Sprintf("failed to mark priority flag as required: %v", err))
+	}
 
 	return cmd
 }

@@ -58,6 +58,7 @@ func Exists(folderPath string) bool {
 
 // Create creates the managed folder if it doesn't exist.
 func Create(folderPath string) error {
+	// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
 	return os.MkdirAll(folderPath, 0755)
 }
 
@@ -468,6 +469,7 @@ func Init() error {
 			fmt.Printf("Permissions are correct: %04o\n", perm)
 		}
 	} else {
+		// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
 		if err := os.MkdirAll(basePath, 0755); err != nil {
 			return fmt.Errorf("failed to create folder: %w", err)
 		}
@@ -479,6 +481,7 @@ func Init() error {
 	// Create front subfolder.
 	frontCreated := false
 	if !Exists(frontPath) {
+		// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
 		if err := os.MkdirAll(frontPath, 0755); err != nil {
 			return fmt.Errorf("failed to create front subfolder: %w", err)
 		}
@@ -489,6 +492,7 @@ func Init() error {
 	// Create back subfolder.
 	backCreated := false
 	if !Exists(backPath) {
+		// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
 		if err := os.MkdirAll(backPath, 0755); err != nil {
 			return fmt.Errorf("failed to create back subfolder: %w", err)
 		}
@@ -683,6 +687,7 @@ func AddToProfile() error {
 	}
 
 	// Open the file for appending.
+	// #nosec G302,G304 -- 0644 permissions are standard for shell profile files; profilePath comes from GetBashProfilePath which returns user's home directory paths
 	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open profile file: %w", err)
@@ -697,6 +702,7 @@ func AddToProfile() error {
 
 	if info.Size() > 0 {
 		// Check if file ends with newline.
+		// #nosec G304 -- profilePath comes from GetBashProfilePath which returns user's home directory paths
 		content, err := os.ReadFile(profilePath)
 		if err != nil {
 			return fmt.Errorf("failed to read profile file: %w", err)
@@ -737,6 +743,7 @@ fi
 
 // profileHasPathmanExport checks if the profile already has a pathman export.
 func profileHasPathmanExport(profilePath string) (bool, error) {
+	// #nosec G304 -- profilePath comes from GetBashProfilePath which returns user's home directory paths
 	f, err := os.Open(profilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1402,6 +1409,7 @@ func SetPriority(name string, toFront bool) error {
 	// Remove old symlink.
 	if err := os.Remove(fromSymlinkPath); err != nil {
 		// Try to clean up the new symlink.
+		// #nosec G104 -- best-effort cleanup in error path, main error is more important
 		os.Remove(toSymlinkPath)
 		return fmt.Errorf("failed to remove symlink from %s folder: %w", fromLabel, err)
 	}

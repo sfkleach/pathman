@@ -48,6 +48,7 @@ func Load() (*Config, error) {
 		return &Config{ManagedDirectories: []ManagedDirectory{}}, nil
 	}
 
+	// #nosec G304 -- configPath comes from GetConfigPath which returns user's home directory path
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -75,6 +76,7 @@ func (c *Config) Save() error {
 
 	// Create config directory if it doesn't exist.
 	configDir := filepath.Dir(configPath)
+	// #nosec G301 -- 0755 permissions are standard for .config directories
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err
 	}
@@ -84,5 +86,6 @@ func (c *Config) Save() error {
 		return err
 	}
 
+	// #nosec G306 -- 0644 permissions are appropriate for config files with non-sensitive data
 	return os.WriteFile(configPath, data, 0644)
 }

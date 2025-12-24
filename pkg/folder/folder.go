@@ -956,3 +956,105 @@ func Rename(oldName, newName string) error {
 
 	return fmt.Errorf("symlink does not exist: %s", oldName)
 }
+
+// ShowPriority displays which folder (front or back) a symlink is in.
+func ShowPriority(name string) error {
+	frontPath, backPath, err := GetBothSubfolders()
+	if err != nil {
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
+	}
+
+	// Check front folder.
+	if Exists(frontPath) {
+		symlinkPath := filepath.Join(frontPath, name)
+		if _, err := os.Lstat(symlinkPath); err == nil {
+			fmt.Printf("%s: front\n", name)
+			return nil
+		}
+	}
+
+	// Check back folder.
+	if Exists(backPath) {
+		symlinkPath := filepath.Join(backPath, name)
+		if _, err := os.Lstat(symlinkPath); err == nil {
+			fmt.Printf("%s: back\n", name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("symlink '%s' not found in either folder", name)
+}
+
+// SetPriority moves a symlink between front and back folders.
+func SetPriority(name string, toFront bool) error {
+	frontPath, backPath, err := GetBothSubfolders()
+	if err != nil {
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
+	}
+
+	var fromPath, toPath string
+	var fromLabel, toLabel string
+
+	if toFront {
+		fromPath = backPath
+		toPath = frontPath
+		fromLabel = "back"
+		toLabel = "front"
+	} else {
+		fromPath = frontPath
+		toPath = backPath
+		fromLabel = "front"
+		toLabel = "back"
+	}
+
+	// Check if symlink exists in source folder.
+	if !Exists(fromPath) {
+		return fmt.Errorf("%s folder does not exist", fromLabel)
+	}
+
+	fromSymlinkPath := filepath.Join(fromPath, name)
+	info, err := os.Lstat(fromSymlinkPath)
+	if err != nil {
+		return fmt.Errorf("symlink '%s' not found in %s folder", name, fromLabel)
+	}
+
+	// Verify it's a symlink.
+	if info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("'%s' is not a symlink", name)
+	}
+
+	// Read the target.
+	target, err := os.Readlink(fromSymlinkPath)
+	if err != nil {
+		return fmt.Errorf("failed to read symlink target: %w", err)
+	}
+
+	// Create destination folder if it doesn't exist.
+	if !Exists(toPath) {
+		if err := Create(toPath); err != nil {
+			return fmt.Errorf("failed to create %s folder: %w", toLabel, err)
+		}
+	}
+
+	toSymlinkPath := filepath.Join(toPath, name)
+
+	// Check if symlink already exists in destination.
+	if _, err := os.Lstat(toSymlinkPath); err == nil {
+		return fmt.Errorf("symlink '%s' already exists in %s folder", name, toLabel)
+	}
+
+	// Create new symlink in destination.
+	if err := os.Symlink(target, toSymlinkPath); err != nil {
+		return fmt.Errorf("failed to create symlink in %s folder: %w", toLabel, err)
+	}
+
+	// Remove old symlink.
+	if err := os.Remove(fromSymlinkPath); err != nil {
+		// Try to clean up the new symlink.
+		os.Remove(toSymlinkPath)
+		return fmt.Errorf("failed to remove symlink from %s folder: %w", fromLabel, err)
+	}
+
+	fmt.Printf("Moved '%s' from %s to %s\n", name, fromLabel, toLabel)
+	return nil
+}

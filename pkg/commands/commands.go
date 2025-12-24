@@ -28,6 +28,8 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewPathCmd())
 	cmd.AddCommand(NewRenameCmd())
+	cmd.AddCommand(NewPriorityCmd())
+	cmd.AddCommand(NewSummaryCmd())
 	cmd.AddCommand(NewSummaryCmd())
 
 	return cmd
@@ -214,6 +216,33 @@ func NewRenameCmd() *cobra.Command {
 			oldName := args[0]
 			newName := args[1]
 			return folder.Rename(oldName, newName)
+		},
+	}
+
+	return cmd
+}
+
+// NewPriorityCmd creates the priority command.
+func NewPriorityCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "priority <name> [front|back]",
+		Short: "Show or change the priority of a symlink",
+		Long: `Show which folder (front or back) a symlink is in, or move it between folders.
+Without a priority argument, shows the current priority.
+With 'front' or 'back', moves the symlink to that folder.`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if len(args) == 1 {
+				// Show current priority.
+				return folder.ShowPriority(name)
+			}
+			// Set priority.
+			priority := args[1]
+			if priority != "front" && priority != "back" {
+				return fmt.Errorf("priority must be 'front' or 'back', got '%s'", priority)
+			}
+			return folder.SetPriority(name, priority == "front")
 		},
 	}
 

@@ -45,7 +45,7 @@ the user has write permission. Report the action back to the console.
 Implement the `pathman add`, `pathman remove` and `pathman list` commands. This
 is effectively CRUD for our managed folder.
 
-- The `pathman add` command takes optional arguments `--front` and `--back` to  
+- The `pathman add` command takes an optional argument `--priority=front|back`
   determine which of the two subfolders the symlink is inserted into. 
 - `pathman add` ensures that if the name already exists then it is not overwritten
   unless the `--force` option is supplied. When `--force` is used, any pre-existing
@@ -62,8 +62,8 @@ is effectively CRUD for our managed folder.
 
 - `pathname list|ls` will list all the commands in a simple list but the `--long` or `-l` will
   add the priority (front/back) and the file it is linked to. The commands are
-  listed in alphabetical order. By adding `--front` or `--back` options the
-  list is restricted by priority - both options are not allowed. 
+  listed in alphabetical order. By adding `--priority=front|back` option the
+  list is restricted by priority. 
 
 
 ## Part D
@@ -78,8 +78,9 @@ Implement the `pathman path` subcommand. This is to support this use-case:
 
 ## Part E
 
-Implement the `pathman rename|mv OLD NEW` command and the `pathman priority NAME`
-and `pathman priority NAME=front|back` commands.
+Implement the `pathman rename|mv OLD NEW` command and also the commands for
+getting and setting priorities `pathman get NAME` and 
+`pathman set NAME --priority=front|back`.
 
 ## Part F
 

@@ -249,7 +249,7 @@ func CheckPathClashes() ([]string, error) {
 		// Find where this symlink is in PATH.
 		var symlinkPosition int = -1
 		var symlinkFolder string
-		
+
 		if symlink.Priority == "front" {
 			symlinkFolder = frontFolder
 		} else {

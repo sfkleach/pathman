@@ -19,13 +19,11 @@ The goal is to build robust, well-designed software, not to avoid technical disa
 ## Collaboration Guidelines
 
 - When testing the behaviour of a binary, such as nutmeg-tokenizer, always use 
-  `go run ./cmd/nutmeg-tokenizer`
-  rather than `./nutmeg-tokenizer` directory. This ensures you are always testing
-  the latest code rather than an out-of-date compiled binary. (Unless you are 
-  deliberately testing an out-of-date binary).
-- Do not create artefacts in the repository 
-  - EXCEPT in the _build folder or, when approved, folders starting with an `_`.
-- Do not commit generated files, binary files, or temporary files.
+  `go run ./cmd/nutmeg-tokenizer` rather than `./nutmeg-tokenizer` directory. 
+  This ensures we are always testing the latest code rather than an out-of-date 
+  compiled binary. (Unless we are deliberately testing an out-of-date binary).
+- Do not create artefacts within the repository folder structure
+  - EXCEPT in folders starting with an underscore, such as  `_build/`.
 
 ## Programming Guidelines
 

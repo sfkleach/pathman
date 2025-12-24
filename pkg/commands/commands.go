@@ -28,7 +28,8 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewPathCmd())
 	cmd.AddCommand(NewRenameCmd())
-	cmd.AddCommand(NewPriorityCmd())
+	cmd.AddCommand(NewGetCmd())
+	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewSummaryCmd())
 	cmd.AddCommand(NewSummaryCmd())
 
@@ -38,8 +39,7 @@ in two managed folders (front and back of $PATH).`,
 // NewAddCmd creates the add command.
 func NewAddCmd() *cobra.Command {
 	var name string
-	var front bool
-	var back bool
+	var priority string
 	var force bool
 
 	cmd := &cobra.Command{
@@ -48,15 +48,15 @@ func NewAddCmd() *cobra.Command {
 		Long: `Add a symlink to an executable in the managed folder.
 The executable path can be relative or absolute. If --name is not specified,
 the basename of the executable will be used as the symlink name.
-Use --front to add to the front folder or --back to add to the back folder (default).`,
+Use --priority to specify 'front' or 'back' folder (default: back).`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if front && back {
-				return fmt.Errorf("cannot specify both --front and --back")
+			if priority != "" && priority != "front" && priority != "back" {
+				return fmt.Errorf("--priority must be 'front' or 'back', got '%s'", priority)
 			}
 
-			// Default to back if neither specified.
-			atFront := front
+			// Default to back if not specified.
+			atFront := priority == "front"
 
 			executable := args[0]
 			return folder.Add(executable, name, atFront, force)
@@ -64,8 +64,7 @@ Use --front to add to the front folder or --back to add to the back folder (defa
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Custom name for the symlink")
-	cmd.Flags().BoolVar(&front, "front", false, "Add to front folder")
-	cmd.Flags().BoolVar(&back, "back", false, "Add to back folder (default)")
+	cmd.Flags().StringVar(&priority, "priority", "back", "Priority: 'front' or 'back' (default: back)")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing symlink and ignore masking warnings")
 
 	return cmd
@@ -91,24 +90,23 @@ func NewRemoveCmd() *cobra.Command {
 // NewListCmd creates the list command.
 func NewListCmd() *cobra.Command {
 	var long bool
-	var front bool
-	var back bool
+	var priority string
 
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List all managed executables",
 		Long: `List all symlinks currently managed by pathman.
-Use --front to list only from the front folder or --back to list only from the back folder.
-Without flags, lists from both folders.`,
+Use --priority to list only from 'front' or 'back' folder.
+Without --priority, lists from both folders.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if front && back {
-				return fmt.Errorf("cannot specify both --front and --back")
+			if priority != "" && priority != "front" && priority != "back" {
+				return fmt.Errorf("--priority must be 'front' or 'back', got '%s'", priority)
 			}
 
-			// If neither flag specified, list from both.
-			if !front && !back {
+			// If priority not specified, list from both.
+			if priority == "" {
 				if long {
 					symlinks, err := folder.ListLongBoth()
 					if err != nil {
@@ -132,7 +130,7 @@ Without flags, lists from both folders.`,
 			}
 
 			// List from specific folder.
-			atFront := front
+			atFront := priority == "front"
 
 			if long {
 				symlinks, err := folder.ListLong(atFront)
@@ -158,8 +156,7 @@ Without flags, lists from both folders.`,
 	}
 
 	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets and priority")
-	cmd.Flags().BoolVar(&front, "front", false, "List only from front folder")
-	cmd.Flags().BoolVar(&back, "back", false, "List only from back folder")
+	cmd.Flags().StringVar(&priority, "priority", "", "List only from 'front' or 'back' folder")
 
 	return cmd
 }
@@ -222,29 +219,45 @@ func NewRenameCmd() *cobra.Command {
 	return cmd
 }
 
-// NewPriorityCmd creates the priority command.
-func NewPriorityCmd() *cobra.Command {
+// NewGetCmd creates the get command.
+func NewGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "priority <name> [front|back]",
-		Short: "Show or change the priority of a symlink",
-		Long: `Show which folder (front or back) a symlink is in, or move it between folders.
-Without a priority argument, shows the current priority.
-With 'front' or 'back', moves the symlink to that folder.`,
-		Args: cobra.RangeArgs(1, 2),
+		Use:   "get <name>",
+		Short: "Show the priority of a symlink",
+		Long:  `Show which folder (front or back) a symlink is in.`,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if len(args) == 1 {
-				// Show current priority.
-				return folder.ShowPriority(name)
+			return folder.ShowPriority(name)
+		},
+	}
+
+	return cmd
+}
+
+// NewSetCmd creates the set command.
+func NewSetCmd() *cobra.Command {
+	var priority string
+
+	cmd := &cobra.Command{
+		Use:   "set <name>",
+		Short: "Change the priority of a symlink",
+		Long:  `Move a symlink between front and back folders using --priority flag.`,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if priority == "" {
+				return fmt.Errorf("--priority flag is required")
 			}
-			// Set priority.
-			priority := args[1]
 			if priority != "front" && priority != "back" {
-				return fmt.Errorf("priority must be 'front' or 'back', got '%s'", priority)
+				return fmt.Errorf("--priority must be 'front' or 'back', got '%s'", priority)
 			}
 			return folder.SetPriority(name, priority == "front")
 		},
 	}
+
+	cmd.Flags().StringVar(&priority, "priority", "", "Priority: 'front' or 'back' (required)")
+	cmd.MarkFlagRequired("priority")
 
 	return cmd
 }

@@ -61,6 +61,87 @@ jobs:
         file: ./coverage.out
         fail_ci_if_error: false
 
+  integration:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+    
+    - name: Build pathman
+      run: go build -v -o pathman${{ matrix.os == 'windows-latest' && '.exe' || '' }} ./cmd/pathman
+    
+    - name: Test pathman init --no (non-interactive)
+      shell: bash
+      run: |
+        # Set up a clean test environment
+        export HOME="${{ runner.temp }}/test-home"
+        mkdir -p "$HOME"
+        
+        # Run pathman init --no
+        ./pathman${{ matrix.os == 'windows-latest' && '.exe' || '' }} init --no
+        
+        # Verify folder structure was created
+        if [ ! -d "$HOME/.local/bin/pathman-links" ]; then
+          echo "ERROR: Base folder not created"
+          exit 1
+        fi
+        
+        if [ ! -d "$HOME/.local/bin/pathman-links/front" ]; then
+          echo "ERROR: Front subfolder not created"
+          exit 1
+        fi
+        
+        if [ ! -d "$HOME/.local/bin/pathman-links/back" ]; then
+          echo "ERROR: Back subfolder not created"
+          exit 1
+        fi
+        
+        # Verify no shell profile was modified (shouldn't exist in test home)
+        if [ -f "$HOME/.profile" ] || [ -f "$HOME/.bash_profile" ] || [ -f "$HOME/.bashrc" ]; then
+          echo "ERROR: Shell profile was created (should not happen with --no)"
+          exit 1
+        fi
+        
+        echo "✓ Integration test passed: init --no created folders without modifying profiles"
+    
+    - name: Test pathman add after init
+      shell: bash
+      run: |
+        export HOME="${{ runner.temp }}/test-home"
+        
+        # Create a test script
+        mkdir -p "$HOME/test-bin"
+        echo '#!/bin/sh' > "$HOME/test-bin/test-script"
+        echo 'echo "test"' >> "$HOME/test-bin/test-script"
+        chmod +x "$HOME/test-bin/test-script"
+        
+        # Add it to pathman
+        ./pathman${{ matrix.os == 'windows-latest' && '.exe' || '' }} add "$HOME/test-bin/test-script" --name test-cmd
+        
+        # Verify symlink was created
+        if [ ! -L "$HOME/.local/bin/pathman-links/front/test-cmd" ]; then
+          echo "ERROR: Symlink not created in front folder"
+          exit 1
+        fi
+        
+        # Verify it points to the right place
+        TARGET=$(readlink "$HOME/.local/bin/pathman-links/front/test-cmd")
+        if [ "$TARGET" != "$HOME/test-bin/test-script" ]; then
+          echo "ERROR: Symlink points to wrong target: $TARGET"
+          exit 1
+        fi
+        
+        echo "✓ Integration test passed: add command works after init"
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -97,5 +178,5 @@ jobs:
     - name: Run Gosec Security Scanner
       run: |
         go install github.com/securego/gosec/v2/cmd/gosec@latest
-        gosec -exclude-generated -conf .gosec.yml ./...
+        gosec -exclude-generated ./...
 

@@ -91,7 +91,7 @@ the complete PATH by combining:
 - `pathman add <path>` [--name NAME] [--priority=PRIORITY] [--force]: Adds an executable or directory to pathman.
   - For **files**: Creates a symlink in the managed subfolder
   - For **directories**: Adds to configuration; all executables in the directory become available
-  - Use `--priority=front` for high priority or `--priority=back` (default) for low priority
+  - Use `--priority=front` (default) for high priority or `--priority=back` for low priority
   - Use `--name` to customize the symlink name (files only)
   - If a symlink with the same name exists in the other subfolder, it will be moved
   - Use `--force` to overwrite existing symlinks and ignore PATH masking warnings
@@ -193,13 +193,13 @@ After updating your shell configuration, restart your terminal or source the con
 
 ## Usage Examples
 
-Add an executable to the back subfolder (default):
+Add an executable to the front subfolder (default):
 
 ```bash
 pathman add /usr/local/bin/myapp
 ```
 
-Add an executable to the front subfolder (high precedence):
+Add an executable to the back subfolder (low precedence):
 
 ```bash
 pathman add /path/to/executable --priority=front

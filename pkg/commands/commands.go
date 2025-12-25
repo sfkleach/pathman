@@ -48,7 +48,7 @@ func NewAddCmd() *cobra.Command {
 		Long: `Add a symlink to an executable in the managed folder.
 The executable path can be relative or absolute. If --name is not specified,
 the basename of the executable will be used as the symlink name.
-Use --priority to specify 'front' or 'back' folder (default: back).`,
+Use --priority to specify 'front' or 'back' folder (default: front).`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if priority != "" && priority != "front" && priority != "back" {
@@ -64,7 +64,7 @@ Use --priority to specify 'front' or 'back' folder (default: back).`,
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Custom name for the symlink")
-	cmd.Flags().StringVar(&priority, "priority", "back", "Priority: 'front' or 'back' (default: back)")
+	cmd.Flags().StringVar(&priority, "priority", "front", "Priority: 'front' or 'back' (default: front)")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing symlink and ignore masking warnings")
 
 	return cmd

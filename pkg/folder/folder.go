@@ -122,6 +122,7 @@ func SelfInstall(currentPath string) error {
 	if runtime.GOOS == "windows" {
 		// On Windows, launch a background PowerShell task to delete after a delay.
 		psCmd := fmt.Sprintf("Start-Sleep -Seconds 2; Remove-Item '%s' -ErrorAction SilentlyContinue", currentPath)
+		// #nosec G204 -- currentPath is validated by os.Executable and filepath.EvalSymlinks, not user input
 		cmd := exec.Command("powershell", "-Command", psCmd)
 		// Start but don't wait for completion.
 		_ = cmd.Start()
@@ -137,12 +138,14 @@ func SelfInstall(currentPath string) error {
 
 // copyFile copies a file from src to dst, preserving file mode.
 func copyFile(src, dst string) error {
+	// #nosec G304 -- src is validated by os.Executable and filepath.EvalSymlinks in SelfInstall caller
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer sourceFile.Close()
 
+	// #nosec G304 -- dst is constructed from GetStandardPathmanLocation which uses os.UserHomeDir
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err

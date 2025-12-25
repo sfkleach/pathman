@@ -14,14 +14,29 @@ import (
 
 // NewInitCmd creates the init command.
 func NewInitCmd() *cobra.Command {
-	return &cobra.Command{
+	var nonInteractive bool
+
+	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create the managed folder",
 		Long: `Create the managed folder with appropriate permissions.
-If the folder already exists, check its permissions and warn if insecure.`,
+If the folder already exists, check its permissions and warn if insecure.
+
+Use --no for non-interactive mode (suitable for scripts). In non-interactive
+mode, only the folder structure is created - no shell profile modifications
+or binary relocations are performed.`,
 		Args: cobra.NoArgs,
-		RunE: runInit,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if nonInteractive {
+				return runNonInteractiveInit()
+			}
+			return runInit(cmd, args)
+		},
 	}
+
+	cmd.Flags().BoolVar(&nonInteractive, "no", false, "Non-interactive mode: create folders only, no prompts")
+
+	return cmd
 }
 
 // initModel represents the state of the init UI.
@@ -52,14 +67,14 @@ func (m initModel) Init() tea.Cmd {
 }
 
 type setupCompleteMsg struct {
-	message         []string
-	needsPathSetup  bool
-	isBashor        bool
-	profilePath     string
+	message          []string
+	needsPathSetup   bool
+	isBashor         bool
+	profilePath      string
 	needsSelfInstall bool
-	currentExecPath string
-	standardPath    string
-	err             error
+	currentExecPath  string
+	standardPath     string
+	err              error
 }
 
 func performSetup() tea.Msg {
@@ -497,6 +512,70 @@ func (m initModel) View() string {
 	}
 
 	return b.String()
+}
+
+// runNonInteractiveInit performs minimal setup without any user interaction.
+func runNonInteractiveInit() error {
+	basePath, err := folder.GetManagedFolder()
+	if err != nil {
+		return fmt.Errorf("failed to get managed folder path: %w", err)
+	}
+
+	frontPath, backPath, err := folder.GetBothSubfolders()
+	if err != nil {
+		return fmt.Errorf("failed to get subfolder paths: %w", err)
+	}
+
+	fmt.Println("Pathman initialization (non-interactive mode)")
+	fmt.Println()
+
+	// Create base folder.
+	// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
+	if err := os.MkdirAll(basePath, 0755); err != nil {
+		return fmt.Errorf("failed to create base folder: %w", err)
+	}
+	fmt.Printf("✓ Created: %s\n", basePath)
+
+	// Create front subfolder.
+	// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
+	if err := os.MkdirAll(frontPath, 0755); err != nil {
+		return fmt.Errorf("failed to create front subfolder: %w", err)
+	}
+	fmt.Printf("✓ Created: %s\n", frontPath)
+
+	// Create back subfolder.
+	// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
+	if err := os.MkdirAll(backPath, 0755); err != nil {
+		return fmt.Errorf("failed to create back subfolder: %w", err)
+	}
+	fmt.Printf("✓ Created: %s\n", backPath)
+
+	fmt.Println()
+	fmt.Println("Folder structure created successfully.")
+	fmt.Println()
+	fmt.Println("Next steps:")
+	fmt.Println("1. Add pathman to your PATH by adding this to your shell profile:")
+	fmt.Println()
+	fmt.Println("   export PATH=$(pathman path)")
+	fmt.Println()
+	fmt.Println("2. Optionally install pathman to a standard location:")
+	fmt.Println()
+
+	execPath, err := os.Executable()
+	if err == nil {
+		resolvedPath, err := filepath.EvalSymlinks(execPath)
+		if err == nil {
+			execPath = resolvedPath
+		}
+	}
+	standardPath, _ := folder.GetStandardPathmanLocation()
+
+	fmt.Printf("   mkdir -p %s\n", filepath.Dir(standardPath))
+	fmt.Printf("   cp %s %s\n", execPath, standardPath)
+	fmt.Printf("   pathman add %s --name pathman\n", standardPath)
+	fmt.Println()
+
+	return nil
 }
 
 func runInit(cmd *cobra.Command, args []string) error {

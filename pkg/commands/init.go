@@ -26,13 +26,16 @@ If the folder already exists, check its permissions and warn if insecure.`,
 
 // initModel represents the state of the init UI.
 type initModel struct {
-	stage              string // "setup", "prompt", "processing", "done"
+	stage              string // "setup", "prompt", "selfInstallPrompt", "processing", "done"
 	message            []string
 	cursor             int
 	choices            []string
 	selected           int // -1 for no selection
 	err                error
 	shouldAddToProfile bool
+	needsSelfInstall   bool
+	currentExecPath    string
+	standardPath       string
 }
 
 func initialInitModel() initModel {
@@ -49,11 +52,14 @@ func (m initModel) Init() tea.Cmd {
 }
 
 type setupCompleteMsg struct {
-	message        []string
-	needsPathSetup bool
-	isBashor       bool
-	profilePath    string
-	err            error
+	message         []string
+	needsPathSetup  bool
+	isBashor        bool
+	profilePath     string
+	needsSelfInstall bool
+	currentExecPath string
+	standardPath    string
+	err             error
 }
 
 func performSetup() tea.Msg {
@@ -150,11 +156,36 @@ func performSetup() tea.Msg {
 				fmt.Sprintf("Since you're using bash, this is normally done by adding a line to your ~/%s file.", profileName),
 			)
 
+			// Check if we should offer self-install.
+			needsSelfInstall := false
+			currentExecPath := ""
+			standardPath := ""
+
+			execPath, err := os.Executable()
+			if err == nil {
+				// Resolve symlinks to get the actual binary location.
+				resolvedPath, err := filepath.EvalSymlinks(execPath)
+				if err == nil {
+					currentExecPath = resolvedPath
+					standardLoc, err := folder.GetStandardPathmanLocation()
+					if err == nil {
+						standardPath = standardLoc
+						inStandard, err := folder.IsInStandardLocation(resolvedPath)
+						if err == nil && !inStandard {
+							needsSelfInstall = true
+						}
+					}
+				}
+			}
+
 			return setupCompleteMsg{
-				message:        messages,
-				needsPathSetup: true,
-				isBashor:       true,
-				profilePath:    profilePath,
+				message:          messages,
+				needsPathSetup:   true,
+				isBashor:         true,
+				profilePath:      profilePath,
+				needsSelfInstall: needsSelfInstall,
+				currentExecPath:  currentExecPath,
+				standardPath:     standardPath,
 			}
 		}
 
@@ -192,9 +223,34 @@ func performSetup() tea.Msg {
 		)
 	}
 
+	// Check if we should offer self-install.
+	needsSelfInstall := false
+	currentExecPath := ""
+	standardPath := ""
+
+	execPath, err := os.Executable()
+	if err == nil {
+		// Resolve symlinks to get the actual binary location.
+		resolvedPath, err := filepath.EvalSymlinks(execPath)
+		if err == nil {
+			currentExecPath = resolvedPath
+			standardLoc, err := folder.GetStandardPathmanLocation()
+			if err == nil {
+				standardPath = standardLoc
+				inStandard, err := folder.IsInStandardLocation(resolvedPath)
+				if err == nil && !inStandard {
+					needsSelfInstall = true
+				}
+			}
+		}
+	}
+
 	return setupCompleteMsg{
-		message:        messages,
-		needsPathSetup: false,
+		message:          messages,
+		needsPathSetup:   false,
+		needsSelfInstall: needsSelfInstall,
+		currentExecPath:  currentExecPath,
+		standardPath:     standardPath,
 	}
 }
 
@@ -209,6 +265,19 @@ func updateProfile() tea.Msg {
 	return profileUpdateMsg{}
 }
 
+type selfInstallCompleteMsg struct {
+	err error
+}
+
+func performSelfInstall(currentPath string) tea.Cmd {
+	return func() tea.Msg {
+		if err := folder.SelfInstall(currentPath); err != nil {
+			return selfInstallCompleteMsg{err: err}
+		}
+		return selfInstallCompleteMsg{}
+	}
+}
+
 func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case setupCompleteMsg:
@@ -219,9 +288,16 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.message = msg.message
+		m.needsSelfInstall = msg.needsSelfInstall
+		m.currentExecPath = msg.currentExecPath
+		m.standardPath = msg.standardPath
 
 		if msg.needsPathSetup && msg.isBashor {
 			m.stage = "prompt"
+		} else if msg.needsSelfInstall {
+			m.stage = "selfInstallPrompt"
+			m.cursor = 0
+			m.choices = []string{"Yes, install pathman to standard location", "No, keep current location"}
 		} else {
 			m.stage = "done"
 			return m, tea.Quit
@@ -230,11 +306,38 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case profileUpdateMsg:
 		if msg.err != nil {
 			m.err = msg.err
+			m.stage = "done"
+			return m, tea.Quit
+		}
+
+		m.message = append(m.message,
+			"",
+			"Successfully added pathman configuration to your profile.",
+			"Please restart your shell or run 'source ~/.profile' to apply changes.",
+		)
+
+		// After profile update, check if we need to offer self-install.
+		if m.needsSelfInstall {
+			m.stage = "selfInstallPrompt"
+			m.cursor = 0
+			m.choices = []string{"Yes, install pathman to standard location", "No, keep current location"}
+			return m, nil
+		}
+
+		m.stage = "done"
+		return m, tea.Quit
+
+	case selfInstallCompleteMsg:
+		if msg.err != nil {
+			m.message = append(m.message,
+				"",
+				fmt.Sprintf("Error installing pathman: %v", msg.err),
+			)
 		} else {
 			m.message = append(m.message,
 				"",
-				"Successfully added pathman configuration to your profile.",
-				"Please restart your shell or run 'source ~/.profile' to apply changes.",
+				fmt.Sprintf("Successfully installed pathman to: %s", m.standardPath),
+				"A symlink has been created in the front subfolder.",
 			)
 		}
 		m.stage = "done"
@@ -290,6 +393,48 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					"fi",
 					"# ============= END PATHMAN CONFIG =============",
 				)
+
+				// After showing manual instructions, check if we need to offer self-install.
+				if m.needsSelfInstall {
+					m.stage = "selfInstallPrompt"
+					m.cursor = 0
+					m.choices = []string{"Yes, install pathman to standard location", "No, keep current location"}
+					return m, nil
+				}
+
+				m.stage = "done"
+				return m, tea.Quit
+			}
+		} else if m.stage == "selfInstallPrompt" {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				m.stage = "done"
+				return m, tea.Quit
+
+			case "up", "k":
+				if m.cursor > 0 {
+					m.cursor--
+				}
+
+			case "down", "j":
+				if m.cursor < len(m.choices)-1 {
+					m.cursor++
+				}
+
+			case "enter", " ":
+				m.selected = m.cursor
+				shouldInstall := (m.cursor == 0)
+				m.stage = "processing"
+
+				if shouldInstall {
+					return m, performSelfInstall(m.currentExecPath)
+				}
+
+				// User chose not to install - just finish.
+				m.message = append(m.message,
+					"",
+					"Keeping pathman at current location.",
+				)
 				m.stage = "done"
 				return m, tea.Quit
 			}
@@ -318,6 +463,21 @@ func (m initModel) View() string {
 	switch m.stage {
 	case "prompt":
 		b.WriteString("\nWould you like me to add the PATH configuration for you?\n\n")
+
+		for i, choice := range m.choices {
+			cursor := " "
+			if m.cursor == i {
+				cursor = ">"
+			}
+			b.WriteString(fmt.Sprintf("%s %s\n", cursor, choice))
+		}
+
+		b.WriteString("\nControls: ↑/k, ↓/j to move, Enter/Space to select, q to quit\n")
+
+	case "selfInstallPrompt":
+		b.WriteString("\nWould you like to install pathman to the standard location?\n")
+		b.WriteString(fmt.Sprintf("Current location: %s\n", m.currentExecPath))
+		b.WriteString(fmt.Sprintf("Standard location: %s\n\n", m.standardPath))
 
 		for i, choice := range m.choices {
 			cursor := " "

@@ -3,8 +3,11 @@ package folder
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,6 +48,118 @@ func GetBothSubfolders() (front string, back string, err error) {
 		return "", "", err
 	}
 	return front, back, nil
+}
+
+// GetStandardPathmanLocation returns the standard location where pathman should be installed.
+func GetStandardPathmanLocation() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".local", "pathman", "bin", "pathman"), nil
+}
+
+// IsInStandardLocation checks if the given path is the standard pathman location.
+func IsInStandardLocation(currentPath string) (bool, error) {
+	standardPath, err := GetStandardPathmanLocation()
+	if err != nil {
+		return false, err
+	}
+
+	// Resolve both paths to handle symlinks.
+	resolvedCurrent, err := filepath.EvalSymlinks(currentPath)
+	if err != nil {
+		// If we can't resolve, just compare directly.
+		resolvedCurrent = currentPath
+	}
+
+	resolvedStandard, err := filepath.EvalSymlinks(standardPath)
+	if err != nil {
+		// If standard location doesn't exist yet, just compare directly.
+		resolvedStandard = standardPath
+	}
+
+	return resolvedCurrent == resolvedStandard, nil
+}
+
+// SelfInstall installs the pathman binary to the standard location and creates a symlink.
+func SelfInstall(currentPath string) error {
+	standardPath, err := GetStandardPathmanLocation()
+	if err != nil {
+		return err
+	}
+
+	frontPath, err := GetFrontFolder()
+	if err != nil {
+		return err
+	}
+
+	// Create the standard location directory.
+	standardDir := filepath.Dir(standardPath)
+	// #nosec G301 -- 0755 permissions are appropriate for PATH directories that need to be accessible by different users
+	if err := os.MkdirAll(standardDir, 0755); err != nil {
+		return fmt.Errorf("failed to create standard location directory: %w", err)
+	}
+
+	// Copy the binary to the standard location.
+	if err := copyFile(currentPath, standardPath); err != nil {
+		return fmt.Errorf("failed to copy binary: %w", err)
+	}
+
+	// Make the copied binary executable.
+	// #nosec G302 -- 0755 permissions are appropriate for executables
+	if err := os.Chmod(standardPath, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %w", err)
+	}
+
+	// Create symlink in front subfolder.
+	symlinkPath := filepath.Join(frontPath, "pathman")
+	if err := os.Symlink(standardPath, symlinkPath); err != nil {
+		return fmt.Errorf("failed to create symlink: %w", err)
+	}
+
+	// Attempt to remove the original executable (OS-specific behavior).
+	if runtime.GOOS == "windows" {
+		// On Windows, launch a background PowerShell task to delete after a delay.
+		psCmd := fmt.Sprintf("Start-Sleep -Seconds 2; Remove-Item '%s' -ErrorAction SilentlyContinue", currentPath)
+		cmd := exec.Command("powershell", "-Command", psCmd)
+		// Start but don't wait for completion.
+		_ = cmd.Start()
+	} else {
+		// On Linux/macOS, attempt direct removal and report any errors.
+		if err := os.Remove(currentPath); err != nil {
+			return fmt.Errorf("installed successfully but failed to remove original executable at %s: %w (you may need to remove it manually)", currentPath, err)
+		}
+	}
+
+	return nil
+}
+
+// copyFile copies a file from src to dst, preserving file mode.
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	// Get source file info to preserve permissions.
+	sourceInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	return os.Chmod(dst, sourceInfo.Mode())
 }
 
 // Exists checks if the managed folder exists.

@@ -637,8 +637,14 @@ func Init() error {
 				fmt.Printf("\nTo add it manually, add these lines to your ~/%s:\n", profileName)
 				fmt.Println("  # Added by pathman")
 				fmt.Println("  if command -v pathman >/dev/null 2>&1; then")
+				fmt.Println("    PATHMAN_CMD=pathman")
+				fmt.Println("  elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then")
+				fmt.Println("    PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"")
+				fmt.Println("  fi")
+				fmt.Println("")
+				fmt.Println("  if [ -n \"$PATHMAN_CMD\" ]; then")
 				fmt.Println("    # Calculate a new $PATH from the old one and pathman's configuration.")
-				fmt.Println("    NEW_PATH=$(pathman path 2>/dev/null)")
+				fmt.Println("    NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)")
 				fmt.Println("    if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then")
 				fmt.Println("      export PATH=\"$NEW_PATH\"")
 				fmt.Println("    elif [ -n \"$PS1\" ]; then")
@@ -654,8 +660,14 @@ func Init() error {
 			fmt.Println("\nTo add it to your PATH, add these lines to your shell configuration:")
 			fmt.Println("  # Added by pathman")
 			fmt.Println("  if command -v pathman >/dev/null 2>&1; then")
+			fmt.Println("    PATHMAN_CMD=pathman")
+			fmt.Println("  elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then")
+			fmt.Println("    PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"")
+			fmt.Println("  fi")
+			fmt.Println("")
+			fmt.Println("  if [ -n \"$PATHMAN_CMD\" ]; then")
 			fmt.Println("    # Calculate a new $PATH from the old one and pathman's configuration.")
-			fmt.Println("    NEW_PATH=$(pathman path 2>/dev/null)")
+			fmt.Println("    NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)")
 			fmt.Println("    if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then")
 			fmt.Println("      export PATH=\"$NEW_PATH\"")
 			fmt.Println("    elif [ -n \"$PS1\" ]; then")
@@ -825,8 +837,14 @@ func AddToProfile() error {
 	exportLine := fmt.Sprintf(`
 # Added by 'pathman init' on %s
 if command -v pathman >/dev/null 2>&1; then
+  PATHMAN_CMD=pathman
+elif [ -x "$HOME/.local/pathman/bin/pathman" ]; then
+  PATHMAN_CMD="$HOME/.local/pathman/bin/pathman"
+fi
+
+if [ -n "$PATHMAN_CMD" ]; then
   # Calculate a new $PATH from the old one and pathman's configuration.
-  NEW_PATH=$(pathman path 2>/dev/null)
+  NEW_PATH=$("$PATHMAN_CMD" path 2>/dev/null)
   if [ $? -eq 0 ] && [ -n "$NEW_PATH" ]; then
     export PATH="$NEW_PATH"
   elif [ -n "$PS1" ]; then

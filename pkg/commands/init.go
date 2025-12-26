@@ -211,27 +211,9 @@ func performSetup() tea.Msg {
 			"",
 			"# ============ BEGIN PATHMAN CONFIG ============",
 			"# Added by pathman",
-			"if command -v pathman >/dev/null 2>&1; then",
-			"  PATHMAN_CMD=pathman",
-			"elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then",
-			"  PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"",
-			"fi",
-			"",
-			"if [ -n \"$PATHMAN_CMD\" ]; then",
-			"  # Calculate a new $PATH from the old one and pathman's configuration.",
-			"  NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)",
-			"  if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then",
-			"    export PATH=\"$NEW_PATH\"",
-			"  elif [ -n \"$PS1\" ]; then",
-			"    # PS1 is only set in interactive shells - safe to show errors here.",
-			"    echo \"Warning: pathman failed to update PATH\" >&2",
-			"  fi",
-			"elif [ -n \"$PS1\" ]; then",
-			"  # PS1 is only set in interactive shells - safe to show errors here.",
-			"  echo \"Warning: pathman not found, PATH not updated\" >&2",
-			"fi",
-			"# ============= END PATHMAN CONFIG =============",
 		)
+		messages = append(messages, folder.GetShellIntegrationScript()...)
+		messages = append(messages, "# ============= END PATHMAN CONFIG =============")
 
 		return setupCompleteMsg{
 			message:        messages,
@@ -399,27 +381,9 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					"",
 					"# ============ BEGIN PATHMAN CONFIG ============",
 					"# Added by pathman",
-					"if command -v pathman >/dev/null 2>&1; then",
-					"  PATHMAN_CMD=pathman",
-					"elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then",
-					"  PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"",
-					"fi",
-					"",
-					"if [ -n \"$PATHMAN_CMD\" ]; then",
-					"  # Calculate a new $PATH from the old one and pathman's configuration.",
-					"  NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)",
-					"  if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then",
-					"    export PATH=\"$NEW_PATH\"",
-					"  elif [ -n \"$PS1\" ]; then",
-					"    # PS1 is only set in interactive shells - safe to show errors here.",
-					"    echo \"Warning: pathman failed to update PATH\" >&2",
-					"  fi",
-					"elif [ -n \"$PS1\" ]; then",
-					"  # PS1 is only set in interactive shells - safe to show errors here.",
-					"  echo \"Warning: pathman not found, PATH not updated\" >&2",
-					"fi",
-					"# ============= END PATHMAN CONFIG =============",
 				)
+				m.message = append(m.message, folder.GetShellIntegrationScript()...)
+				m.message = append(m.message, "# ============= END PATHMAN CONFIG =============")
 
 				// After showing manual instructions, check if we need to offer self-install.
 				if m.needsSelfInstall {

@@ -12,6 +12,32 @@ import (
 	"github.com/sfkleach/pathman/pkg/config"
 )
 
+// GetShellIntegrationScript returns the shell script lines for PATH integration.
+// The script checks for pathman on PATH first, then falls back to ~/.local/pathman/bin/pathman.
+func GetShellIntegrationScript() []string {
+	return []string{
+		"if command -v pathman >/dev/null 2>&1; then",
+		"  PATHMAN_CMD=pathman",
+		"elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then",
+		"  PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"",
+		"fi",
+		"",
+		"if [ -n \"$PATHMAN_CMD\" ]; then",
+		"  # Calculate a new $PATH from the old one and pathman's configuration.",
+		"  NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)",
+		"  if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then",
+		"    export PATH=\"$NEW_PATH\"",
+		"  elif [ -n \"$PS1\" ]; then",
+		"    # PS1 is only set in interactive shells - safe to show errors here.",
+		"    echo \"Warning: pathman failed to update PATH\" >&2",
+		"  fi",
+		"elif [ -n \"$PS1\" ]; then",
+		"  # PS1 is only set in interactive shells - safe to show errors here.",
+		"  echo \"Warning: pathman not found, PATH not updated\" >&2",
+		"fi",
+	}
+}
+
 // GetManagedFolder returns the path to the managed folder.
 func GetManagedFolder() (string, error) {
 	return config.GetDefaultManagedFolder()
@@ -636,48 +662,16 @@ func Init() error {
 			} else {
 				fmt.Printf("\nTo add it manually, add these lines to your ~/%s:\n", profileName)
 				fmt.Println("  # Added by pathman")
-				fmt.Println("  if command -v pathman >/dev/null 2>&1; then")
-				fmt.Println("    PATHMAN_CMD=pathman")
-				fmt.Println("  elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then")
-				fmt.Println("    PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"")
-				fmt.Println("  fi")
-				fmt.Println("")
-				fmt.Println("  if [ -n \"$PATHMAN_CMD\" ]; then")
-				fmt.Println("    # Calculate a new $PATH from the old one and pathman's configuration.")
-				fmt.Println("    NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)")
-				fmt.Println("    if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then")
-				fmt.Println("      export PATH=\"$NEW_PATH\"")
-				fmt.Println("    elif [ -n \"$PS1\" ]; then")
-				fmt.Println("      # PS1 is only set in interactive shells - safe to show errors here.")
-				fmt.Println("      echo \"Warning: pathman failed to update PATH\" >&2")
-				fmt.Println("    fi")
-				fmt.Println("  elif [ -n \"$PS1\" ]; then")
-				fmt.Println("    # PS1 is only set in interactive shells - safe to show errors here.")
-				fmt.Println("    echo \"Warning: pathman not found, PATH not updated\" >&2")
-				fmt.Println("  fi")
+				for _, line := range GetShellIntegrationScript() {
+					fmt.Printf("  %s\n", line)
+				}
 			}
 		} else {
 			fmt.Println("\nTo add it to your PATH, add these lines to your shell configuration:")
 			fmt.Println("  # Added by pathman")
-			fmt.Println("  if command -v pathman >/dev/null 2>&1; then")
-			fmt.Println("    PATHMAN_CMD=pathman")
-			fmt.Println("  elif [ -x \"$HOME/.local/pathman/bin/pathman\" ]; then")
-			fmt.Println("    PATHMAN_CMD=\"$HOME/.local/pathman/bin/pathman\"")
-			fmt.Println("  fi")
-			fmt.Println("")
-			fmt.Println("  if [ -n \"$PATHMAN_CMD\" ]; then")
-			fmt.Println("    # Calculate a new $PATH from the old one and pathman's configuration.")
-			fmt.Println("    NEW_PATH=$(\"$PATHMAN_CMD\" path 2>/dev/null)")
-			fmt.Println("    if [ $? -eq 0 ] && [ -n \"$NEW_PATH\" ]; then")
-			fmt.Println("      export PATH=\"$NEW_PATH\"")
-			fmt.Println("    elif [ -n \"$PS1\" ]; then")
-			fmt.Println("      # PS1 is only set in interactive shells - safe to show errors here.")
-			fmt.Println("      echo \"Warning: pathman failed to update PATH\" >&2")
-			fmt.Println("    fi")
-			fmt.Println("  elif [ -n \"$PS1\" ]; then")
-			fmt.Println("    # PS1 is only set in interactive shells - safe to show errors here.")
-			fmt.Println("    echo \"Warning: pathman not found, PATH not updated\" >&2")
-			fmt.Println("  fi")
+			for _, line := range GetShellIntegrationScript() {
+				fmt.Printf("  %s\n", line)
+			}
 		}
 	} else if baseCreated || frontCreated || backCreated {
 		fmt.Println()
@@ -834,28 +828,13 @@ func AddToProfile() error {
 
 	// Add the export line using pathman path.
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	exportLine := fmt.Sprintf(`
-# Added by 'pathman init' on %s
-if command -v pathman >/dev/null 2>&1; then
-  PATHMAN_CMD=pathman
-elif [ -x "$HOME/.local/pathman/bin/pathman" ]; then
-  PATHMAN_CMD="$HOME/.local/pathman/bin/pathman"
-fi
-
-if [ -n "$PATHMAN_CMD" ]; then
-  # Calculate a new $PATH from the old one and pathman's configuration.
-  NEW_PATH=$("$PATHMAN_CMD" path 2>/dev/null)
-  if [ $? -eq 0 ] && [ -n "$NEW_PATH" ]; then
-    export PATH="$NEW_PATH"
-  elif [ -n "$PS1" ]; then
-    # PS1 is only set in interactive shells - safe to show errors here.
-    echo "Warning: pathman failed to update PATH" >&2
-  fi
-elif [ -n "$PS1" ]; then
-  # PS1 is only set in interactive shells - safe to show errors here.
-  echo "Warning: pathman not found, PATH not updated" >&2
-fi
-`, timestamp)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\n# Added by 'pathman init' on %s\n", timestamp))
+	for _, line := range GetShellIntegrationScript() {
+		sb.WriteString(line)
+		sb.WriteString("\n")
+	}
+	exportLine := sb.String()
 	if _, err := f.WriteString(exportLine); err != nil {
 		return fmt.Errorf("failed to write to profile: %w", err)
 	}

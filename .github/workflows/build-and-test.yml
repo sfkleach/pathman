@@ -47,6 +47,12 @@ jobs:
     - name: Build
       run: go build -v -o pathman ./cmd/pathman
     
+    - name: Smoke test version command
+      run: |
+        ./pathman version
+        ./pathman --version
+      shell: bash
+    
     - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:

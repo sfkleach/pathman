@@ -10,6 +10,9 @@ _Expected to be v0.1.0._
 
 - Core PATH management with two-priority system (front/back subfolders)
 - `pathman init` command with interactive TUI for shell configuration setup
+- `pathman init --no` non-interactive mode for scripted setups (creates folders without modifying shell profiles)
+- Self-install feature: `pathman init` installs itself to standard location (`~/.local/pathman/bin/pathman`)
+- `pathman version` command and `--version` flag for checking installed version
 - `pathman add` command supporting both individual executables and entire directories
 - `pathman remove` command (with `rm` alias) for removing managed items
 - `pathman list` command (with `ls` alias) for viewing managed executables and directories

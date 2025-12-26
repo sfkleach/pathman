@@ -15,9 +15,11 @@
 go.work
 
 # Build output
-/_build
+/_build/
+_build/
 /bin/
 /dist/
+pathman
 
 # IDE files
 .vscode/

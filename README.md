@@ -4,6 +4,41 @@ Pathman is a command-line tool that helps you manage the list of applications
 accessible by $PATH. With `pathman`, you can add individual executables to the
 front or back of your $PATH, remove them, list them and detect path clashes.
 
+## Installation
+
+Download the latest release for your platform from the [releases page](https://github.com/sfkleach/pathman/releases).
+
+### Linux
+
+```bash
+# Download and extract (replace VERSION with actual version, e.g., 0.1.0)
+curl -L https://github.com/sfkleach/pathman/releases/download/vVERSION/pathman_VERSION_linux_amd64.tar.gz | tar xz
+
+# Make it executable
+chmod +x pathman
+
+# Run initial setup (this will install pathman to ~/.local/pathman/bin/pathman)
+./pathman init
+```
+
+### macOS
+
+```bash
+# Download and extract (replace VERSION with actual version, e.g., 0.1.0)
+curl -L https://github.com/sfkleach/pathman/releases/download/vVERSION/pathman_VERSION_darwin_amd64.tar.gz | tar xz
+
+# Make it executable
+chmod +x pathman
+
+# Run initial setup (this will install pathman to ~/.local/pathman/bin/pathman)
+./pathman init
+```
+
+The `pathman init` command will:
+- Install pathman to its standard location (`~/.local/pathman/bin/pathman`)
+- Create the managed folders for symlinks
+- Offer to update your shell profile to include pathman's folders in your PATH
+
 ## Features
 
 - **Two-priority system**: Manage executables at front (override system tools) or back (fallback) of $PATH

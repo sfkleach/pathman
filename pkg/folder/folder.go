@@ -129,10 +129,9 @@ func SelfInstall(currentPath string) error {
 	if _, err := os.Stat(standardPath); err == nil {
 		// File exists - add write permission before attempting to remove it.
 		// This is defensive: the file might not have write permission.
-		if err := os.Chmod(standardPath, 0755); err != nil {
-			// If we can't change permissions, we might still be able to remove it,
-			// so we continue rather than failing here.
-		}
+		// We ignore any error from Chmod since we might still be able to remove it.
+		// #nosec G302 -- 0755 permissions are appropriate for executables
+		_ = os.Chmod(standardPath, 0755)
 		// Remove the existing binary.
 		if err := os.Remove(standardPath); err != nil {
 			return fmt.Errorf("failed to remove existing binary at %s: %w", standardPath, err)

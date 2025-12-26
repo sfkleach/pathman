@@ -7,8 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is set at build time via ldflags.
+var Version = "dev"
+
 // NewRootCmd creates the root command for pathman.
 func NewRootCmd() *cobra.Command {
+	var versionFlag bool
+
 	cmd := &cobra.Command{
 		Use:   "pathman",
 		Short: "Pathman manages executables on your $PATH",
@@ -16,10 +21,16 @@ func NewRootCmd() *cobra.Command {
 accessible by $PATH. With pathman, you can add, remove, and list executables
 in two managed folders (front and back of $PATH).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if versionFlag {
+				fmt.Printf("pathman version %s\n", Version)
+				return nil
+			}
 			// Default behavior: show folder summary.
 			return folder.PrintSummary()
 		},
 	}
+
+	cmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Print version information")
 
 	// Add subcommands.
 	cmd.AddCommand(NewAddCmd())
@@ -32,6 +43,7 @@ in two managed folders (front and back of $PATH).`,
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewSummaryCmd())
 	cmd.AddCommand(NewCleanCmd())
+	cmd.AddCommand(NewVersionCmd())
 
 	return cmd
 }
@@ -268,6 +280,22 @@ func NewSummaryCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return folder.PrintSummary()
+		},
+	}
+
+	return cmd
+}
+
+// NewVersionCmd creates the version command.
+func NewVersionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Long:  `Print the version of pathman.`,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("pathman version %s\n", Version)
+			return nil
 		},
 	}
 

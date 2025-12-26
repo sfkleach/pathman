@@ -41,7 +41,7 @@ or binary relocations are performed.`,
 
 // initModel represents the state of the init UI.
 type initModel struct {
-	stage              string // "setup", "prompt", "selfInstallPrompt", "processing", "done"
+	stage              string // "setup", "prompt", "selfInstallPrompt", "removeOriginalPrompt", "processing", "done"
 	message            []string
 	cursor             int
 	choices            []string
@@ -272,12 +272,25 @@ type selfInstallCompleteMsg struct {
 	err error
 }
 
+type removeOriginalCompleteMsg struct {
+	err error
+}
+
 func performSelfInstall(currentPath string) tea.Cmd {
 	return func() tea.Msg {
 		if err := folder.SelfInstall(currentPath); err != nil {
 			return selfInstallCompleteMsg{err: err}
 		}
 		return selfInstallCompleteMsg{}
+	}
+}
+
+func performRemoveOriginal(originalPath string) tea.Cmd {
+	return func() tea.Msg {
+		if err := folder.RemoveOriginalBinary(originalPath); err != nil {
+			return removeOriginalCompleteMsg{err: err}
+		}
+		return removeOriginalCompleteMsg{}
 	}
 }
 
@@ -336,11 +349,33 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"",
 				fmt.Sprintf("Error installing pathman: %v", msg.err),
 			)
+			m.stage = "done"
+			return m, tea.Quit
+		}
+
+		m.message = append(m.message,
+			"",
+			fmt.Sprintf("Successfully installed pathman to: %s", m.standardPath),
+			"A symlink has been created in the front subfolder.",
+		)
+
+		// Ask if user wants to remove the original binary.
+		m.stage = "removeOriginalPrompt"
+		m.cursor = 0
+		m.choices = []string{"Yes, remove the original binary", "No, keep the original binary"}
+		return m, nil
+
+	case removeOriginalCompleteMsg:
+		if msg.err != nil {
+			m.message = append(m.message,
+				"",
+				fmt.Sprintf("Warning: %v", msg.err),
+				"You may need to remove it manually.",
+			)
 		} else {
 			m.message = append(m.message,
 				"",
-				fmt.Sprintf("Successfully installed pathman to: %s", m.standardPath),
-				"A symlink has been created in the front subfolder.",
+				fmt.Sprintf("Removed original binary from: %s", m.currentExecPath),
 			)
 		}
 		m.stage = "done"
@@ -429,6 +464,39 @@ func (m initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.stage = "done"
 				return m, tea.Quit
 			}
+		} else if m.stage == "removeOriginalPrompt" {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				m.stage = "done"
+				return m, tea.Quit
+
+			case "up", "k":
+				if m.cursor > 0 {
+					m.cursor--
+				}
+
+			case "down", "j":
+				if m.cursor < len(m.choices)-1 {
+					m.cursor++
+				}
+
+			case "enter", " ":
+				m.selected = m.cursor
+				shouldRemove := (m.cursor == 0)
+				m.stage = "processing"
+
+				if shouldRemove {
+					return m, performRemoveOriginal(m.currentExecPath)
+				}
+
+				// User chose not to remove - just finish.
+				m.message = append(m.message,
+					"",
+					fmt.Sprintf("Original binary kept at: %s", m.currentExecPath),
+				)
+				m.stage = "done"
+				return m, tea.Quit
+			}
 		} else if m.stage == "done" {
 			return m, tea.Quit
 		}
@@ -469,6 +537,20 @@ func (m initModel) View() string {
 		b.WriteString("\nWould you like to install pathman to the standard location?\n")
 		b.WriteString(fmt.Sprintf("Current location: %s\n", m.currentExecPath))
 		b.WriteString(fmt.Sprintf("Standard location: %s\n\n", m.standardPath))
+
+		for i, choice := range m.choices {
+			cursor := " "
+			if m.cursor == i {
+				cursor = ">"
+			}
+			b.WriteString(fmt.Sprintf("%s %s\n", cursor, choice))
+		}
+
+		b.WriteString("\nControls: ↑/k, ↓/j to move, Enter/Space to select, q to quit\n")
+
+	case "removeOriginalPrompt":
+		b.WriteString("\nWould you like to remove the original executable?\n")
+		b.WriteString(fmt.Sprintf("Original location: %s\n\n", m.currentExecPath))
 
 		for i, choice := range m.choices {
 			cursor := " "

@@ -125,6 +125,20 @@ func SelfInstall(currentPath string) error {
 		return fmt.Errorf("failed to create standard location directory: %w", err)
 	}
 
+	// Check if there's already a pathman binary at the standard location.
+	if _, err := os.Stat(standardPath); err == nil {
+		// File exists - add write permission before attempting to remove it.
+		// This is defensive: the file might not have write permission.
+		if err := os.Chmod(standardPath, 0755); err != nil {
+			// If we can't change permissions, we might still be able to remove it,
+			// so we continue rather than failing here.
+		}
+		// Remove the existing binary.
+		if err := os.Remove(standardPath); err != nil {
+			return fmt.Errorf("failed to remove existing binary at %s: %w", standardPath, err)
+		}
+	}
+
 	// Copy the binary to the standard location.
 	if err := copyFile(currentPath, standardPath); err != nil {
 		return fmt.Errorf("failed to copy binary: %w", err)
@@ -136,17 +150,30 @@ func SelfInstall(currentPath string) error {
 		return fmt.Errorf("failed to set executable permissions: %w", err)
 	}
 
-	// Create symlink in front subfolder.
+	// Create symlink in front subfolder if it doesn't already exist.
 	symlinkPath := filepath.Join(frontPath, "pathman")
+	if _, err := os.Lstat(symlinkPath); err == nil {
+		// Symlink already exists - don't replace it.
+		// This is appropriate: if the symlink exists, it's already managed.
+		return nil
+	} else if !os.IsNotExist(err) {
+		// Some other error occurred while checking for the symlink.
+		return fmt.Errorf("failed to check for existing symlink: %w", err)
+	}
+
+	// Symlink doesn't exist, create it.
 	if err := os.Symlink(standardPath, symlinkPath); err != nil {
 		return fmt.Errorf("failed to create symlink: %w", err)
 	}
 
-	// Attempt to remove the original executable.
-	if err := os.Remove(currentPath); err != nil {
-		return fmt.Errorf("installed successfully but failed to remove original executable at %s: %w (you may need to remove it manually)", currentPath, err)
-	}
+	return nil
+}
 
+// RemoveOriginalBinary removes the original pathman binary after successful self-install.
+func RemoveOriginalBinary(originalPath string) error {
+	if err := os.Remove(originalPath); err != nil {
+		return fmt.Errorf("failed to remove original executable at %s: %w", originalPath, err)
+	}
 	return nil
 }
 

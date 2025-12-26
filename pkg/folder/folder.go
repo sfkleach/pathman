@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -118,19 +116,9 @@ func SelfInstall(currentPath string) error {
 		return fmt.Errorf("failed to create symlink: %w", err)
 	}
 
-	// Attempt to remove the original executable (OS-specific behavior).
-	if runtime.GOOS == "windows" {
-		// On Windows, launch a background PowerShell task to delete after a delay.
-		psCmd := fmt.Sprintf("Start-Sleep -Seconds 2; Remove-Item '%s' -ErrorAction SilentlyContinue", currentPath)
-		// #nosec G204 -- currentPath is validated by os.Executable and filepath.EvalSymlinks, not user input
-		cmd := exec.Command("powershell", "-Command", psCmd)
-		// Start but don't wait for completion.
-		_ = cmd.Start()
-	} else {
-		// On Linux/macOS, attempt direct removal and report any errors.
-		if err := os.Remove(currentPath); err != nil {
-			return fmt.Errorf("installed successfully but failed to remove original executable at %s: %w (you may need to remove it manually)", currentPath, err)
-		}
+	// Attempt to remove the original executable.
+	if err := os.Remove(currentPath); err != nil {
+		return fmt.Errorf("installed successfully but failed to remove original executable at %s: %w (you may need to remove it manually)", currentPath, err)
 	}
 
 	return nil

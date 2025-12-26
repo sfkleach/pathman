@@ -18,12 +18,6 @@ subfolder, and finally unlink the running executable.
 Note: If the application is already in the standard location, this interaction
 should not be offered.
 
-## Implementation note on Windows
-
-On windows we cannot unlink a running executable. On Windows we should therefore
-launch a background task just before the application quits that attempts to 
-delete it - a powershell script will do it.
-
 ## Motivation
 
 This idea behind this change is to answer the question "where should pathman be

@@ -19,7 +19,7 @@ The goal is to build robust, well-designed software, not to avoid technical disa
 ## Collaboration Guidelines
 
 - When testing the behaviour of a binary, such as nutmeg-tokenizer, always use 
-  `go run ./cmd/nutmeg-tokenizer` rather than `./nutmeg-tokenizer` directory. 
+  `go run ./cmd/nutmeg-tokenizer` rather than `./nutmeg-tokenizer` directly. 
   This ensures we are always testing the latest code rather than an out-of-date 
   compiled binary. (Unless we are deliberately testing an out-of-date binary).
 - Do not create artefacts within the repository folder structure
@@ -33,6 +33,8 @@ The goal is to build robust, well-designed software, not to avoid technical disa
 
 - Comments should be proper sentences, with correct grammar and punctuation,
   including the use of capitalization and periods.
+  - EXCEPT for comments that are simply single words or short phrases
+    such as `// TODO: ...` or `// Deprecated` or bullet-points.
 - Where defensive checks are added, include a comment explaining why they are
   appropriate (not necessary, since defensive checks are not necessary).
 

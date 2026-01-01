@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/sfkleach/pathman/pkg/folder"
 	"github.com/spf13/cobra"
@@ -9,6 +11,9 @@ import (
 
 // Version is set at build time via ldflags.
 var Version = "dev"
+
+// Source is set at build time via ldflags to the git repository URL.
+var Source = "https://github.com/sfkleach/pathman"
 
 // NewRootCmd creates the root command for pathman.
 func NewRootCmd() *cobra.Command {
@@ -288,16 +293,40 @@ func NewSummaryCmd() *cobra.Command {
 
 // NewVersionCmd creates the version command.
 func NewVersionCmd() *cobra.Command {
+	var jsonFlag bool
+
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Long:  `Print the version of pathman.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if jsonFlag {
+				return outputVersionJSON()
+			}
 			fmt.Printf("pathman version %s\n", Version)
 			return nil
 		},
 	}
 
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output in JSON format")
+
 	return cmd
+}
+
+// outputVersionJSON outputs version information in JSON format.
+func outputVersionJSON() error {
+	output := map[string]string{
+		"version": Version,
+		"source":  Source,
+	}
+
+	// Pretty-print JSON.
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "    ")
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to encode JSON: %w", err)
+	}
+
+	return nil
 }

@@ -48,7 +48,7 @@ tidy:
 
 build:
     mkdir -p bin
-    go build -o bin/pathman ./cmd/pathman
+    go build -ldflags "-X github.com/sfkleach/pathman/pkg/commands.Source=https://github.com/sfkleach/pathman" -o bin/pathman ./cmd/pathman
 
 install:
     go install ./cmd/pathman

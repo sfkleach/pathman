@@ -21,6 +21,9 @@ _build/
 /dist/
 pathman
 
+# Local tools
+/tools/
+
 # IDE files
 .vscode/
 .idea/

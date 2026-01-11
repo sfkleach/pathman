@@ -2,10 +2,12 @@ package folder
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -1545,4 +1547,342 @@ func SetPriority(name string, toFront bool) error {
 
 	fmt.Printf("Moved '%s' from %s to %s\n", name, fromLabel, toLabel)
 	return nil
+}
+
+// ListEntry represents a single entry (file or directory) in the list output.
+type ListEntry struct {
+	Type     string // "file" or "directory"
+	Name     string // For files: symlink name. For directories: empty (use Path instead).
+	Path     string // For directories: full path. For files: empty.
+	Symlink  string // For files: symlink target.
+	Priority string // "front" or "back"
+}
+
+// GetAllEntries retrieves all files and directories, optionally filtered.
+func GetAllEntries(priorityFilter, typeFilter, nameFilter string) ([]ListEntry, error) {
+	var entries []ListEntry
+
+	// Get symlinks from both folders.
+	if typeFilter == "" || typeFilter == "file" {
+		frontPath, backPath, err := GetBothSubfolders()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subfolder paths: %w", err)
+		}
+
+		// Process front folder if not filtered to back only.
+		if priorityFilter == "" || priorityFilter == "front" {
+			if Exists(frontPath) {
+				frontEntries, err := os.ReadDir(frontPath)
+				if err == nil {
+					for _, entry := range frontEntries {
+						entryPath := filepath.Join(frontPath, entry.Name())
+						info, err := os.Lstat(entryPath)
+						if err == nil && info.Mode()&os.ModeSymlink != 0 {
+							// Apply name filter.
+							if nameFilter != "" && entry.Name() != nameFilter {
+								continue
+							}
+
+							target, err := os.Readlink(entryPath)
+							if err != nil {
+								target = "<error reading link>"
+							}
+							entries = append(entries, ListEntry{
+								Type:     "file",
+								Name:     entry.Name(),
+								Symlink:  target,
+								Priority: "front",
+							})
+						}
+					}
+				}
+			}
+		}
+
+		// Process back folder if not filtered to front only.
+		if priorityFilter == "" || priorityFilter == "back" {
+			if Exists(backPath) {
+				backEntries, err := os.ReadDir(backPath)
+				if err == nil {
+					for _, entry := range backEntries {
+						entryPath := filepath.Join(backPath, entry.Name())
+						info, err := os.Lstat(entryPath)
+						if err == nil && info.Mode()&os.ModeSymlink != 0 {
+							// Apply name filter.
+							if nameFilter != "" && entry.Name() != nameFilter {
+								continue
+							}
+
+							target, err := os.Readlink(entryPath)
+							if err != nil {
+								target = "<error reading link>"
+							}
+							entries = append(entries, ListEntry{
+								Type:     "file",
+								Name:     entry.Name(),
+								Symlink:  target,
+								Priority: "back",
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get directories from config.
+	if typeFilter == "" || typeFilter == "directory" {
+		cfg, err := config.Load()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %w", err)
+		}
+
+		for _, dir := range cfg.ManagedDirectories {
+			// Apply priority filter.
+			if priorityFilter != "" && dir.Priority != priorityFilter {
+				continue
+			}
+			// Apply name filter (match against base name of directory path).
+			if nameFilter != "" && filepath.Base(dir.Path) != nameFilter {
+				continue
+			}
+
+			entries = append(entries, ListEntry{
+				Type:     "directory",
+				Path:     dir.Path,
+				Priority: dir.Priority,
+			})
+		}
+	}
+
+	return entries, nil
+}
+
+// ListCompactFormat lists entries in compact format (names only).
+func ListCompactFormat(priorityFilter, typeFilter, nameFilter string, byPriority bool) error {
+	entries, err := GetAllEntries(priorityFilter, typeFilter, nameFilter)
+	if err != nil {
+		return err
+	}
+
+	if byPriority {
+		// Sort by priority (front first), then alphabetically.
+		var frontEntries []string
+		var backEntries []string
+
+		for _, entry := range entries {
+			var name string
+			if entry.Type == "file" {
+				name = entry.Name
+			} else {
+				name = entry.Path
+			}
+
+			if entry.Priority == "front" {
+				frontEntries = append(frontEntries, name)
+			} else {
+				backEntries = append(backEntries, name)
+			}
+		}
+
+		// Sort each group alphabetically.
+		sortStrings(frontEntries)
+		sortStrings(backEntries)
+
+		// Print front first, then back.
+		for _, name := range frontEntries {
+			fmt.Println(name)
+		}
+		for _, name := range backEntries {
+			fmt.Println(name)
+		}
+	} else {
+		// Partition by type and sort alphabetically within each partition.
+		var files []string
+		var directories []string
+
+		for _, entry := range entries {
+			if entry.Type == "file" {
+				files = append(files, entry.Name)
+			} else {
+				directories = append(directories, entry.Path)
+			}
+		}
+
+		// Sort each group alphabetically.
+		sortStrings(files)
+		sortStrings(directories)
+
+		// Print files first, then directories.
+		for _, name := range files {
+			fmt.Println(name)
+		}
+		for _, path := range directories {
+			fmt.Println(path)
+		}
+	}
+
+	return nil
+}
+
+// ListLongFormat lists entries in long format with labels.
+func ListLongFormat(priorityFilter, typeFilter, nameFilter string, byPriority bool) error {
+	entries, err := GetAllEntries(priorityFilter, typeFilter, nameFilter)
+	if err != nil {
+		return err
+	}
+
+	// Sort entries based on flag.
+	if byPriority {
+		sortEntriesByPriority(entries)
+	} else {
+		sortEntriesByType(entries)
+	}
+
+	first := true
+	for _, entry := range entries {
+		// Add blank line between entries (but not before first entry).
+		if !first {
+			fmt.Println()
+		}
+		first = false
+
+		if entry.Type == "file" {
+			fmt.Printf("%-13s %s\n", "File:", entry.Name)
+			fmt.Printf("%-13s %s\n", "Symlink:", entry.Symlink)
+			fmt.Printf("%-13s %s\n", "Priority:", entry.Priority)
+		} else {
+			fmt.Printf("%-13s %s\n", "Directory:", entry.Path)
+			fmt.Printf("%-13s %s\n", "Priority:", entry.Priority)
+		}
+	}
+
+	return nil
+}
+
+// FileEntry represents a file entry for JSON output.
+type FileEntry struct {
+	File     string `json:"file"`
+	Symlink  string `json:"symlink"`
+	Priority string `json:"priority"`
+}
+
+// DirEntry represents a directory entry for JSON output.
+type DirEntry struct {
+	Directory string `json:"directory"`
+	Priority  string `json:"priority"`
+}
+
+// ListJSON lists entries in JSON format.
+func ListJSON(priorityFilter, typeFilter, nameFilter string) error {
+	entries, err := GetAllEntries(priorityFilter, typeFilter, nameFilter)
+	if err != nil {
+		return err
+	}
+
+	// Separate files and directories.
+
+	output := struct {
+		Files       []FileEntry `json:"files"`
+		Directories []DirEntry  `json:"directories"`
+	}{
+		Files:       []FileEntry{},
+		Directories: []DirEntry{},
+	}
+
+	// Collect entries by type.
+	var files []FileEntry
+	var dirs []DirEntry
+
+	for _, entry := range entries {
+		if entry.Type == "file" {
+			files = append(files, FileEntry{
+				File:     entry.Name,
+				Symlink:  entry.Symlink,
+				Priority: entry.Priority,
+			})
+		} else {
+			dirs = append(dirs, DirEntry{
+				Directory: entry.Path,
+				Priority:  entry.Priority,
+			})
+		}
+	}
+
+	// Sort files alphabetically by name.
+	sortFileEntries(files)
+	// Sort directories alphabetically by path.
+	sortDirEntries(dirs)
+
+	output.Files = files
+	output.Directories = dirs
+
+	// Pretty-print JSON.
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "    ")
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to encode JSON: %w", err)
+	}
+
+	return nil
+}
+
+// sortStrings sorts a slice of strings alphabetically in-place.
+func sortStrings(items []string) {
+	sort.Strings(items)
+}
+
+// sortEntriesByType sorts entries by type (files first, then directories), then alphabetically within each type.
+func sortEntriesByType(entries []ListEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		// Files before directories.
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type == "file"
+		}
+
+		// Within same type, sort alphabetically.
+		if entries[i].Type == "file" {
+			return entries[i].Name < entries[j].Name
+		}
+		return entries[i].Path < entries[j].Path
+	})
+}
+
+// sortEntriesByPriority sorts entries by priority (front first, then back), then alphabetically within each priority.
+func sortEntriesByPriority(entries []ListEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		// Front before back.
+		if entries[i].Priority != entries[j].Priority {
+			return entries[i].Priority == "front"
+		}
+
+		// Within same priority, sort alphabetically.
+		if entries[i].Type == "file" {
+			if entries[j].Type == "file" {
+				return entries[i].Name < entries[j].Name
+			}
+			// If i is file and j is directory, compare by name vs path.
+			return entries[i].Name < entries[j].Path
+		}
+		if entries[j].Type == "file" {
+			// If i is directory and j is file.
+			return entries[i].Path < entries[j].Name
+		}
+		// Both are directories.
+		return entries[i].Path < entries[j].Path
+	})
+}
+
+// sortFileEntries sorts file entries alphabetically by name.
+func sortFileEntries(files []FileEntry) {
+	sort.SliceStable(files, func(i, j int) bool {
+		return files[i].File < files[j].File
+	})
+}
+
+// sortDirEntries sorts directory entries alphabetically by path.
+func sortDirEntries(dirs []DirEntry) {
+	sort.SliceStable(dirs, func(i, j int) bool {
+		return dirs[i].Directory < dirs[j].Directory
+	})
 }

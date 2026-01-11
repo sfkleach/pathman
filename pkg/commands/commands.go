@@ -107,85 +107,53 @@ func NewRemoveCmd() *cobra.Command {
 // NewListCmd creates the list command.
 func NewListCmd() *cobra.Command {
 	var long bool
+	var jsonOutput bool
 	var priority string
+	var typeFilter string
+	var byPriority bool
 
 	cmd := &cobra.Command{
-		Use:     "list",
+		Use:     "list [executable-name]",
 		Aliases: []string{"ls"},
-		Short:   "List all managed executables and directories",
+		Short:   "List managed executables and directories",
 		Long: `List all symlinks and directories currently managed by pathman.
 Use --priority to list only from 'front' or 'back' folder.
-Without --priority, lists from both folders and all managed directories.`,
-		Args: cobra.NoArgs,
+Use --type to list only 'file' or 'directory' entries.
+Provide an executable name to filter by exact match.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Validate flags.
 			if priority != "" && priority != "front" && priority != "back" {
 				return fmt.Errorf("--priority must be 'front' or 'back', got '%s'", priority)
 			}
-
-			// If priority not specified, list from both.
-			if priority == "" {
-				if long {
-					symlinks, dirs, err := folder.ListLongBothWithDirs()
-					if err != nil {
-						return err
-					}
-
-					// Print symlinks.
-					for _, info := range symlinks {
-						fmt.Printf("%-5s  %s -> %s\n", info.Priority, info.Name, info.Target)
-					}
-
-					// Print directories.
-					for _, dir := range dirs {
-						fmt.Printf("%-5s  %s/\n", dir.Priority, dir.Path)
-					}
-				} else {
-					symlinks, dirs, err := folder.ListBothWithDirs()
-					if err != nil {
-						return err
-					}
-
-					// Print symlinks.
-					for _, name := range symlinks {
-						fmt.Println(name)
-					}
-
-					// Print directories.
-					for _, dir := range dirs {
-						fmt.Printf("%s/\n", dir.Path)
-					}
-				}
-				return nil
+			if typeFilter != "" && typeFilter != "file" && typeFilter != "directory" {
+				return fmt.Errorf("--type must be 'file' or 'directory', got '%s'", typeFilter)
 			}
 
-			// List from specific folder (symlinks only, no directories filtered by priority here).
-			atFront := priority == "front"
+			// Get filter name if provided.
+			var filterName string
+			if len(args) > 0 {
+				filterName = args[0]
+			}
+
+			// JSON trumps long and ignores bypriority.
+			if jsonOutput {
+				return folder.ListJSON(priority, typeFilter, filterName)
+			}
 
 			if long {
-				symlinks, err := folder.ListLong(atFront)
-				if err != nil {
-					return err
-				}
-
-				for _, info := range symlinks {
-					fmt.Printf("%-5s  %s -> %s\n", info.Priority, info.Name, info.Target)
-				}
-			} else {
-				symlinks, err := folder.List(atFront)
-				if err != nil {
-					return err
-				}
-
-				for _, name := range symlinks {
-					fmt.Println(name)
-				}
+				return folder.ListLongFormat(priority, typeFilter, filterName, byPriority)
 			}
-			return nil
+
+			return folder.ListCompactFormat(priority, typeFilter, filterName, byPriority)
 		},
 	}
 
-	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show symlink targets and priority")
+	cmd.Flags().BoolVarP(&long, "long", "l", false, "Show detailed information")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().StringVar(&priority, "priority", "", "List only from 'front' or 'back' folder")
+	cmd.Flags().StringVar(&typeFilter, "type", "", "List only 'file' or 'directory' entries")
+	cmd.Flags().BoolVar(&byPriority, "bypriority", false, "Order by priority rather than by type (file/directory)")
 
 	return cmd
 }

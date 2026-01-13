@@ -16,7 +16,6 @@ go.work
 
 # Build output
 /_build/
-_build/
 /bin/
 /dist/
 pathman

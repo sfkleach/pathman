@@ -66,7 +66,7 @@ add-decision TOPIC:
 demo-pack:
     rm -rf _build/demo-pack
     mkdir -p _build/demo-pack
-    cp -r  README.md LICENSE CONTRIBUTING.md .gitignore .github scripts tools _build/demo-pack/
+    cp -r  Justfile README.md LICENSE CONTRIBUTING.md .gitignore .github scripts tools _build/demo-pack/
     mkdir -p _build/demo-pack/cmd/pathman
     touch _build/demo-pack/cmd/pathman/main.go
     mkdir -p _build/demo-pack/docs/tasks

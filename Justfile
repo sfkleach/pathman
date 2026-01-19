@@ -64,18 +64,26 @@ add-decision TOPIC:
 
 # Create a demo package for showing how to do AI assisted coding, using pathman as an example.
 demo-pack:
-    rm -rf _build/demo-pack
-    mkdir -p _build/demo-pack
-    cp -r  Justfile README.md LICENSE CONTRIBUTING.md .gitignore .github scripts tools _build/demo-pack/
-    mkdir -p _build/demo-pack/cmd/pathman
-    touch _build/demo-pack/cmd/pathman/main.go
-    mkdir -p _build/demo-pack/docs/tasks
-    cp docs/tasks/README.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-23-initial-dev.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-24a-fix-script.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-24b-manage-dirs.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-24c-pathman-clean.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-24d-pathman-init-with-bubbletea.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-25-self-install.md _build/demo-pack/docs/tasks/
-    cp docs/tasks/2025-12-26-version-check-and-update.md _build/demo-pack/docs/tasks/
-    (cd _build && zip -r demo-pack.zip demo-pack)
+    @rm -rf _build/demo-pack
+    @mkdir -p _build/demo-pack
+    @cp -r Justfile README.md LICENSE CONTRIBUTING.md .gitignore .github scripts tools _build/demo-pack/
+    @mkdir -p _build/demo-pack/cmd/pathman
+    @touch _build/demo-pack/cmd/pathman/main.go
+    @mkdir -p _build/demo-pack/docs/tasks
+    @cp docs/tasks/README.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-23-initial-dev.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-24a-fix-script.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-24b-manage-dirs.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-24c-pathman-clean.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-24d-pathman-init-with-bubbletea.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-25-self-install.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2025-12-26-version-check-and-update.md _build/demo-pack/docs/tasks/
+    @cp docs/tasks/2026-01-19-demo-initial-dev.md _build/demo-pack/docs/tasks/
+    @(cd _build && zip -qr demo-pack.zip demo-pack)
+    @echo "Demo package created at _build/demo-pack.zip"
+
+git-init:
+    git init
+    git add .gitignore .github *
+    git commit -m "Initial commit"
+

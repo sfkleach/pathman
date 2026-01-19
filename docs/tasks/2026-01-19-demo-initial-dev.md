@@ -30,6 +30,9 @@ Available Commands:
   version     Print version information
 ```
 
+The managed folder is determined by JSON configuration in `./.config/pathman.conf`.
+By default it will be `~/.local/bin/pathman-links/` with subfolders `front` and 
+`back`.
 
 Note: Use cobra for command line parsing.
 
@@ -47,9 +50,6 @@ Implement the `pathman path` subcommand. This is to support this use-case:
   not just its own managed folders, discarding any occurences after the first.
   This means it cleans up existing $PATH errors.
 
-The managed folder is determined by configuration in `./.config/pathman.conf`.
-By default it will be `~/.local/bin/pathman-links/` with subfolders `front` and 
-`back`.
 
 ## Part C (20 mins)
 

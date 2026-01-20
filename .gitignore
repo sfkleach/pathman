@@ -18,7 +18,7 @@ go.work
 /_build/
 /bin/
 /dist/
-pathman
+/pathman/
 
 # Local tools
 /tools/ext/

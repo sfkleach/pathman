@@ -104,6 +104,11 @@ fi
 # ============= END PATHMAN CONFIG =============
 ```
 
+To help the user with this script, implement a subcommand `script` that
+generates a script suitable for `.profile` (or similar) i.e. generates the above
+listing. If the user declines to include the script then they should be reminded
+that this is the easy way to generate a script for inclusion.
+
 ## Part D (10 mins)
 
 Implement the `pathman add`, `pathman remove` and `pathman list` commands. This

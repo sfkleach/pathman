@@ -37,7 +37,7 @@ install-golangci-lint:
     @echo "Note that ~/tools/ext/bin is not assumed to be in your PATH"
 
 fmt:
-    go fmt ./...
+    go fmt ./cmd/... ./pkg/...
 
 # Check formatting without modifying files
 fmt-check:
@@ -63,7 +63,7 @@ add-decision TOPIC:
     python3 scripts/decisions.py --add "{{TOPIC}}"
 
 # Create a demo package for showing how to do AI assisted coding, using pathman as an example.
-demo-pack:
+build-demo-pack:
     @rm -rf _build/demo-pack
     @mkdir -p _build/demo-pack
     @cp -r Justfile README.md LICENSE CONTRIBUTING.md .gitignore .github scripts tools _build/demo-pack/

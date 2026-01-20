@@ -53,6 +53,11 @@ build:
 install:
     go install ./cmd/pathman
 
+clean:
+    rm -rf bin
+    rm -rf dist
+    rm -rf _build
+
 
 # Initialize decision records
 init-decisions:

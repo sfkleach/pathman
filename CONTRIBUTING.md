@@ -1,6 +1,6 @@
-# Contributing to Execman
+# Contributing to Pathman
 
-Thank you for your interest in contributing to Execman! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to pathman! This document provides guidelines and instructions for contributing to the project.
 
 ## Development Setup
 
@@ -15,14 +15,14 @@ Thank you for your interest in contributing to Execman! This document provides g
 1. Fork the repository on GitHub
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/execman.git
-   cd execman
+   git clone https://github.com/YOUR-USERNAME/pathman.git
+   cd pathman
    ```
 3. Build the project:
    ```bash
    just build
    # or without just:
-   go build -o bin/execman ./cmd/execman
+   go build -o bin/pathman ./cmd/pathman
    ```
 4. Run tests:
    ```bash
@@ -34,8 +34,8 @@ Thank you for your interest in contributing to Execman! This document provides g
 ### Project Structure
 
 ```
-execman/
-├── cmd/execman/            # Main entry point
+pathman/
+├── cmd/pathman/            # Main entry point
 ├── pkg/
 │   ├── commands/           # CLI command definitions
 │   ├── config/             # Configuration and registry management
@@ -172,7 +172,7 @@ Types:
 ### Reporting Bugs
 
 Include:
-- Execman version (`execman version` or git commit)
+- pathman version (`pathman version` or git commit)
 - Operating system and version
 - Steps to reproduce
 - Expected behavior vs actual behavior
@@ -207,7 +207,7 @@ Equivalent commands:
 ```bash
 # Build
 mkdir -p bin
-go build -o bin/execman ./cmd/execman
+go build -o bin/pathman ./cmd/pathman
 
 # Test
 go test ./...
@@ -252,11 +252,11 @@ Instead, email security concerns to the project maintainer. Include:
 
 ## License
 
-By contributing to Execman, you agree that your contributions will be licensed under the GNU General Public License v3.0 (GPL-3.0).
+By contributing to pathman, you agree that your contributions will be licensed under the GNU General Public License v3.0 (GPL-3.0).
 
 ## Recognition
 
 Contributors will be recognized in the project. Significant contributors may be added to a CONTRIBUTORS file.
 
-Thank you for helping make Execman better!
+Thank you for helping make pathman better!
 

@@ -50,6 +50,10 @@ build:
     mkdir -p bin
     go build -ldflags "-X github.com/sfkleach/pathman/pkg/commands.Source=https://github.com/sfkleach/pathman" -o bin/pathman ./cmd/pathman
 
+clean:
+    rm -rf bin
+    rm -rf _build
+
 install:
     go install ./cmd/pathman
 
